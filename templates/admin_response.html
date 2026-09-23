@@ -1,0 +1,53 @@
+{% extends 'admin_base.html' %}
+{% macro tr2(orig, ko) -%}{{ ko or orig or '' }}{% if orig and ko and orig != ko %}<div class="mut" style="font-size:12px">원문: {{ orig }}</div>{% endif %}{%- endmacro %}
+{% block body %}
+<h1>{{ r.name }} <span class="badge b-{{ r.top_level or 'none' }}">{{ S.LEVEL_KO[r.top_level] }}</span>
+  <span class="mut" style="font-size:13px">#{{ r.id }} · {{ kst(r.created_at).strftime('%Y-%m-%d %H:%M') }} · {{ S.FLAGS.get(r.lang,'') }} {{ S.LANG_NAMES.get(r.lang,'') }}</span></h1>
+<div class="grid g2">
+<div class="card">
+  <h2>I. 기본 사항</h2>
+  <table>
+    <tr><th>직원명단</th><td>{{ '연결됨' if r.employee_id else '직접 입력' }}</td><th>연령/성별</th><td>{{ r.age or '' }}세 / {{ S.label('sex', r.sex) }}</td></tr>
+    <tr><th>부서</th><td>{{ r.dept }}</td><th>결혼여부</th><td>{{ S.label('married', r.married) }}</td></tr>
+    <tr><th>수행작업</th><td colspan="3">{{ r.job.name if r.job else '' }} {{ tr2(r.job_other, r.job_other_ko) }}</td></tr>
+    <tr><th>현 직장경력</th><td>{{ r.career_y or 0 }}년 {{ r.career_m or 0 }}개월</td><th>1일 근무</th><td>{{ r.work_hours or '' }}시간 · 휴식 {{ r.rest_min or '-' }}분×{{ r.rest_times or '-' }}회</td></tr>
+    <tr><th>현재 작업</th><td colspan="3">{{ tr2(r.cur_task, r.cur_task_ko) }} ({{ r.cur_y or 0 }}년 {{ r.cur_m or 0 }}개월)</td></tr>
+    <tr><th>이전 작업</th><td colspan="3">{{ tr2(r.prev_task, r.prev_task_ko) }} {% if r.prev_task %}({{ r.prev_y or 0 }}년 {{ r.prev_m or 0 }}개월){% endif %}</td></tr>
+    <tr><th>1. 여가·취미</th><td colspan="3">{% for h in jload(r.hobbies, []) %}{{ S.label('hobby', h) }}{{ ', ' if not loop.last }}{% endfor %}</td></tr>
+    <tr><th>2. 가사노동</th><td colspan="3">{{ S.label('housework', r.housework) }}</td></tr>
+    <tr><th>3. 질병진단</th><td colspan="3">{% if r.disease_yn=='Y' %}예 — {% for d in jload(r.diseases, []) %}{{ S.label('disease', d) }}{{ ', ' if not loop.last }}{% endfor %} ({{ S.label('dstatus', r.disease_status) }}){% else %}아니오{% endif %}</td></tr>
+    <tr><th>4. 과거 상해</th><td colspan="3">{% if r.injury_yn=='Y' %}예{{ ' (' ~ S.label('istatus', r.injury_status) ~ ')' if r.injury_status }} — {% for d in jload(r.injuries, []) %}{{ S.label('injury', d) }}{{ ', ' if not loop.last }}{% endfor %}{% else %}아니오{% endif %}</td></tr>
+    <tr><th>5. 육체적 부담</th><td colspan="3">{{ S.label('burden', r.burden) }}</td></tr>
+    <tr><th>개선 의견</th><td colspan="3">{{ tr2(r.opinion, r.opinion_ko) }}</td></tr>
+  </table>
+</div>
+<div class="card">
+  <h2>사후관리 (관리자 전용)</h2>
+  <form method="post">
+    <label class="f">수행작업 연결 (작업별 집계에 사용)</label>
+    <select name="job_id" style="width:100%"><option value="">(미연결)</option>
+      {% for j in jobs_all %}<option value="{{ j.id }}" {{ 'selected' if r.job_id==j.id }}>{{ j.dept }} / {{ j.name }}</option>{% endfor %}</select>
+    <label class="f">사후관리 상태</label>
+    <select name="followup" style="width:100%">{% for o in ['', '미조치', '상담 실시', '의료기관 진료 권고', '작업 전환', '작업환경 개선', '완료'] %}<option {{ 'selected' if (r.followup or '')==o }}>{{ o }}</option>{% endfor %}</select>
+    <label class="f">메모</label><textarea name="admin_note">{{ r.admin_note or '' }}</textarea>
+    <p><button class="btn p">저장</button></p>
+  </form>
+  <form method="post" action="{{ url_for('response_delete', rid=r.id) }}" onsubmit="return confirm('이 응답을 삭제할까요? 되돌릴 수 없습니다.')"><button class="btn d s">응답 삭제</button></form>
+</div>
+</div>
+<div class="card tbl-wrap">
+  <h2>II. 통증 부위별 응답 {% if r.has_pain != 'Y' %}<span class="mut">— 지난 1년간 통증 없음</span>{% endif %}</h2>
+  {% if r.has_pain == 'Y' %}{% set pd = r.pain_dict %}{% set pl = r.part_levels %}
+  <table>
+    <tr><th>부위</th><th>판정</th><th>좌/우</th><th>지속기간</th><th>아픈 정도</th><th>빈도</th><th>지난 1주</th><th>통증으로 인한 일</th></tr>
+    {% for p in S.PARTS if pd.get(p) %}{% set d = pd[p] %}
+    <tr><td><b>{{ S.label('part', p) }}</b></td><td><span class="badge b-{{ pl[p] }}">{{ S.LEVEL_KO[pl[p]] }}</span></td>
+      <td>{{ S.label('side', d.side) if d.side else '' }}</td><td>{{ S.label('dur', d.duration) }}</td><td>{{ S.label('int', d.intensity) }}</td>
+      <td>{{ S.label('freq', d.frequency) }}</td><td>{{ '예' if d.lastweek=='Y' else ('아니오' if d.lastweek=='N' else '') }}</td>
+      <td>{% for c in d.conseq or [] %}{{ S.label('cq', c) }}{{ ', ' if not loop.last }}{% endfor %} {{ tr2(d.other, d.other_ko) }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+<p><a class="btn" href="{{ url_for('responses') }}">← 목록</a></p>
+{% endblock %}

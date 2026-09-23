@@ -1,0 +1,237 @@
+{% extends 'admin_base.html' %}
+{% block head %}<style>
+.cl th,.cl td{text-align:center;padding:4px}.cl td.l,.cl th.l{text-align:left}
+.rowtbl input[type=text],.cl input[type=text]{width:100%}
+.ref{font-size:12px;color:var(--mut)}
+.photos{display:flex;gap:10px;flex-wrap:wrap}.photos figure{margin:0;width:180px}.photos img{width:180px;height:130px;object-fit:cover;border-radius:6px;border:1px solid var(--line)}
+.lg{font-size:15px;margin:2px 0 8px;padding-left:8px;border-left:4px solid var(--red)}
+.photobar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:4px 0 8px}
+.photobar select,.photobar input[type=text]{min-width:220px}
+.photos figure{position:relative}.photos img{cursor:zoom-in}
+.savebar{position:sticky;bottom:0;background:rgba(245,246,248,.96);backdrop-filter:blur(4px);padding:10px 0;margin-top:10px;border-top:1px solid var(--line);display:flex;gap:8px;z-index:5}
+@media (pointer:coarse){
+  .bigbtn{padding:12px 18px;font-size:16px}
+  .bw input,.cl input[type=checkbox],input[type=radio]{width:22px;height:22px}
+  .bw label{padding:8px 8px;font-size:14px}
+  select,input[type=text],input[type=number],input[type=date],textarea{font-size:16px;padding:10px}
+  .btn.s{padding:8px 12px;font-size:14px}
+}
+.unit{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin-bottom:10px;background:#fcfcfd}
+.uh{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.uh .no{background:var(--ink);color:#fff;border-radius:50%;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:12px}
+.uh .uname{flex:1;min-width:220px;font-weight:600}
+.uh select{max-width:230px}
+.tot-wrap{background:#eef1f4;border-radius:6px;padding:5px 10px;font-size:13px}
+.tot-wrap .tot{font-size:15px}
+.bw{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:4px 10px}
+.bw label{display:flex;gap:6px;align-items:flex-start;font-size:13px;padding:4px 6px;border-radius:6px;cursor:pointer}
+.bw label:has(input:checked){background:#fff1f3;outline:1px solid #f5b5b5}
+.bw input{margin-top:3px}
+.bw b{white-space:nowrap}
+.bw .cond{color:var(--mut);font-size:12px;white-space:nowrap}
+</style>{% endblock %}
+{% block body %}
+<h1>유해요인조사표 — {{ job.dept }} / {{ job.name }}</h1>
+<p class="mut">[별지 제1호서식] · {{ rnd.title }} · 이 작업을 선택한 증상조사 응답 {{ rs|length }}명
+  (관리대상자 {{ rs|selectattr('top_level','equalto','manage')|list|length }}, 통증호소자 {{ rs|selectattr('top_level','equalto','pain')|list|length }})</p>
+<form method="post" enctype="multipart/form-data">
+
+<div class="card">
+  <h2 class="lg">가. 조사 개요</h2>
+  <table>
+    <tr><th style="width:120px">부서명</th><td>{{ job.dept }}</td><th style="width:120px">작업공정명</th><td>{{ job.process or '' }}</td></tr>
+  </table>
+  <div class="frm" style="margin-top:6px">
+    <div><label class="f">조사일시</label><input type="date" name="survey_date" value="{{ a.survey_date if a and a.survey_date else '' }}"></div>
+    <div><label class="f">조사자</label><input type="text" name="investigator" value="{{ a.investigator if a and a.investigator else (rnd.investigator or '') }}"></div>
+    <div><label class="f">작업명</label><input type="text" name="job_title" value="{{ a.job_title if a and a.job_title else job.name }}"></div>
+  </div>
+</div>
+
+<div class="card">
+  <h2 class="lg">나. 작업장 상황 조사</h2>
+  <p class="ref" style="margin-top:0">이전 유해요인조사일 기준으로 변화 유무를 체크하고, 변화가 있으면 언제부터·얼마나 변했는지 적습니다. (인원이 바뀐 경우도 작업량 변화로 봅니다 — 편람)</p>
+  <table>
+  {% for k, lab in S.SITE_ITEMS %}{% set v = st.get(k,{}) %}
+    <tr><th style="width:100px">{{ lab }}</th>
+      <td style="width:330px">{% set opts = S.SITE_OPTS[k] %}{% for o in opts %}<label style="margin-right:12px"><input type="radio" name="st_{{ k }}" value="{{ o }}" {{ 'checked' if (v.get('v') if v.get('v') in opts else '변화 없음')==o }}> {{ o }}</label>{% endfor %}</td>
+      <td><input type="text" name="st_{{ k }}_since" placeholder="언제부터 / 내용" value="{{ v.get('since','') }}" style="width:100%"></td></tr>
+  {% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2 class="lg">다. 작업조건 조사 (인간공학적인 측면을 고려한 조사)</h2>
+  <p style="margin:0 0 2px"><b>1단계</b> 작업별 주요 작업내용 — 작업명: <b>{{ a.job_title if a and a.job_title else job.name }}</b></p>
+  <p class="ref" style="margin:0 0 10px">이 작업을 세부 동작 단위(단위작업)로 나눠 아래 카드에 하나씩 적습니다. 예) 제조: 원료 포대 투입, 믹서 운전, 드럼 충진, 탱크 청소 / 포장: 카트리지 투입, 박스 포장, 팔레트 적재</p>
+  <p style="margin:0 0 6px"><b>2단계</b> 작업별 작업부하 및 작업빈도 — 단위작업별 부담작업(호) · 작업부하(A) × 작업빈도(B) <span class="ref">(근로자 면담)</span></p>
+  <div id="units">
+  {% for t in tasks + [{}] %}
+  <div class="unit">
+    <div class="uh">
+      <span class="no">{{ loop.index }}</span>
+      <input type="text" name="t_name" value="{{ t.name or '' }}" placeholder="단위작업명 (예: 원료 포대 투입)" class="uname">
+      <label class="ref">근로자 수</label><input type="number" name="t_workers" value="{{ t.workers or '' }}" min="0" style="width:64px">
+      <label class="ref">작업부하(A)</label>
+      <select name="t_load" class="sc"><option value="">선택</option>{% for s_,l in S.LOAD_SCORE %}<option value="{{ s_ }}" {{ 'selected' if t.load==s_ }}>{{ s_ }} {{ l }}</option>{% endfor %}</select>
+      <label class="ref">작업빈도(B)</label>
+      <select name="t_freq" class="sc"><option value="">선택</option>{% for s_,l in S.FREQ_SCORE %}<option value="{{ s_ }}" {{ 'selected' if t.freq==s_ }}>{{ s_ }} {{ l }}</option>{% endfor %}</select>
+      <span class="tot-wrap">총점수 <b class="tot">-</b></span>
+      <button type="button" class="btn s d" onclick="delUnit(this)" title="이 단위작업 삭제">삭제</button>
+    </div>
+    {% set us = ustats.get(t.name) %}{% set ud = udesc.get(t.name) %}
+    {% if ud and ud.desc %}<div class="ref" style="margin:6px 0 0">{{ ud.loc ~ ' · ' if ud.loc }}{{ ud.desc }}</div>{% endif %}
+    <div class="ref" style="margin:6px 0 0">{% if us %}📱 근로자 응답 <b>{{ us.n }}명</b> — 평균 작업부하 <b>{{ us.a }}</b> · 작업빈도 <b>{{ us.b }}</b> · 평균 총점수 <b>{{ us.score }}</b>
+      <button type="button" class="btn s" onclick="applyAvg(this,{{ us.a }},{{ us.b }})">평균 적용</button>{% else %}📱 근로자 응답 없음{% endif %}</div>
+    {% if us and us.sug %}<div class="ref" style="margin:4px 0 0">📱 응답 기반 부담작업 후보:
+      {% for i, c in us.sug %}<b style="{{ 'color:#b42318' if i in us.sug_major }}">{{ i }}호</b>({{ c }}/{{ us.n }}명){{ ', ' if not loop.last }}{% endfor %}
+      <button type="button" class="btn s" onclick="applySug(this, {{ us.sug_major|tojson }})">과반 후보 체크</button> <span class="mut">빨간 호 = 응답자 절반 이상</span></div>{% endif %}
+    {% if us and (us.hz or us.txt) %}<div class="ref" style="margin:4px 0 0">📱 가장 힘든 점:
+      {% for k, c in us.hz %}{{ S.U_HZ_TYPE[k] }} {{ c }}명{{ ', ' if not loop.last }}{% endfor %}
+      {% if us.txt %}<br>· {{ us.txt|join(' · ') }}{% endif %}
+      <button type="button" class="btn s" onclick="addHz({{ t.name|tojson }}, {{ (S.U_HZ_TYPE[us.hz[0][0]] if us.hz else '')|tojson }}, {{ (us.txt[0] if us.txt else '')|tojson }})">원인분석 초안 넣기</button></div>{% endif %}
+    <div class="ref" style="margin:6px 0 4px">부담작업 해당 항목 (해당하는 것 모두 체크, 없으면 비워둠)</div>
+    <div class="bw">
+      {% for n,txt,part in S.BURDEN_WORKS %}{% set sh = S.BURDEN_SHORT[n] %}
+      <label title="{{ txt }}"><input type="checkbox" class="bwchk" data-n="{{ n }}" name="t_{{ loop.index0 }}_{{ n }}" value="1" {{ 'checked' if n in (t.get('items') or []) }}>
+        <b>{{ n }}호</b> {{ sh[0] }} <span class="cond">{{ sh[1] }}</span></label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+  </div>
+  <button type="button" class="btn s" onclick="addUnit()">+ 단위작업 추가</button>
+  {% if ustats %}<button type="button" class="btn s p" onclick="document.querySelectorAll('.unit [onclick^=applyAvg]').forEach(b => b.click())">근로자 응답 평균을 모든 단위작업에 적용</button>{% endif %}
+  <p class="ref">단위작업 목록은 [작업·유해요인조사표 → 수정]의 '단위작업 목록'에서 미리 넣어두면 자동으로 채워집니다. 작업부하·빈도는 직원이 폰 설문에서 고른 값의 평균을 적용할 수 있습니다(반올림).</p>
+  <p class="ref" style="margin-top:8px">작업부하(A): {% for s_,l in S.LOAD_SCORE %}{{ s_ }} {{ l }}{{ ' · ' if not loop.last }}{% endfor %}<br>
+    작업빈도(B): {% for s_,l in S.FREQ_SCORE %}{{ s_ }} {{ l }}{{ ' · ' if not loop.last }}{% endfor %}<br>
+    단위작업명을 비우고 저장하면 그 카드는 저장되지 않습니다. 체크 결과는 보고서의 '근골격계부담작업 해당 여부' 표가 됩니다.</p>
+  <details class="ref"><summary>근골격계부담작업 제1~11호 원문 보기</summary>
+    <ol style="margin:6px 0">{% for n,txt,part in S.BURDEN_WORKS %}<li><b>[{{ part }}]</b> {{ txt }}</li>{% endfor %}</ol></details>
+</div>
+
+<div class="card">
+  <p style="margin:0 0 6px"><b>3단계</b> 유해요인평가</p>
+  {% set picked = ((a.worker_name or '') if a else '').split(', ') %}
+  <label class="f">근로자명 <span class="ref">— 면담·평가 대상 작업자 ({{ job.dept }} / {{ job.name }} 소속 {{ workers|length }}명)</span></label>
+  {% if workers %}<div style="display:flex;flex-wrap:wrap;gap:6px">
+    {% for e in workers %}<label style="border:1px solid #cfd4dc;border-radius:6px;padding:4px 8px;font-size:13px"><input type="checkbox" name="worker_pick" value="{{ e.name }}" {{ 'checked' if e.name in picked }}> {{ e.name }} <span class="ref">{{ e.position }}{{ ' · ' ~ e.nationality if e.nationality and e.nationality != '한국' }}{{ ' · ' ~ e.note if e.note }}</span></label>{% endfor %}
+  </div>{% else %}<p class="ref" style="margin:2px 0">이 작업에 연결된 직원이 없습니다. <a href="{{ url_for('employees') }}">직원명단</a>에서 불러오거나 연결하세요.</p>{% endif %}
+  {% set extra = picked|reject('in', workers|map(attribute='name')|list)|reject('equalto','')|list %}
+  <input type="text" name="worker_extra" placeholder="목록에 없는 사람은 직접 입력 (쉼표로 구분)" value="{{ extra|join(', ') }}" style="width:100%;margin-top:6px">
+  <p class="ref" style="margin:4px 0 0">※ '가. 조사 개요'의 조사자는 조사하는 사람(작성자), 여기 근로자명은 조사 대상 당사자입니다.</p>
+  <label class="f">단위작업 사진 또는 그림</label>
+  <div class="photobar">
+    <select id="ph_unit"><option value="">사진 설명(단위작업) 선택</option>{% for t in tasks %}{% if t.name %}<option>{{ t.name }}</option>{% endif %}{% endfor %}<option value="__etc">직접 입력…</option></select>
+    <input type="text" id="ph_cap" placeholder="직접 입력 (예: 원료 투입 자세)" class="hide">
+    <label class="btn p bigbtn">📷 바로 촬영<input type="file" accept="image/*" capture="environment" hidden onchange="upPhotos(this)"></label>
+    <label class="btn bigbtn">🖼 사진 선택<input type="file" accept="image/*" multiple hidden onchange="upPhotos(this)"></label>
+    <span id="ph_msg" class="ref"></span>
+  </div>
+  <div class="photos" id="photos">{% for p in photos %}<figure data-id="{{ p.id }}"><img src="{{ url_for('photo', pid=p.id) }}" onclick="window.open(this.src)"><figcaption class="ref">{{ p.caption }}
+    <button type="button" class="btn s d" onclick="delPhoto(this, '{{ url_for('photo_delete', pid=p.id) }}')">삭제</button></figcaption></figure>{% endfor %}</div>
+  <p class="ref" style="margin:4px 0 0">사진은 찍는 즉시 자동으로 줄여서(최대 1600px) 저장됩니다. [저장]을 누르지 않아도 사진은 남습니다.</p>
+  <label class="f" style="margin-top:12px">작업별로 관찰된 유해요인에 대한 원인분석</label>
+  <table class="rowtbl" id="htbl">
+    <tr><th style="width:190px">단위작업명</th><th style="width:80px">부담작업(호)</th><th style="width:190px">유해요인</th><th>발생원인</th><th style="width:160px">비고</th><th style="width:40px"></th></tr>
+    {% for h in hazards + [{}] %}
+    <tr><td><input type="text" name="h_task" value="{{ h.task or '' }}" list="unitlist"></td>
+      <td class="ref">{{ (h.get('items') or [])|join(', ') }}</td>
+      <td><select name="h_type"><option value=""></option>{% for ty in S.HAZARD_TYPES %}<option {{ 'selected' if h.type==ty }}>{{ ty }}</option>{% endfor %}</select></td>
+      <td><input type="text" name="h_cause" value="{{ h.cause or '' }}"></td>
+      <td><input type="text" name="h_note" value="{{ h.note or h.parts or '' }}"></td>
+      <td><button type="button" class="btn s" onclick="this.closest('tr').remove()">×</button></td></tr>
+    {% endfor %}
+  </table>
+  <datalist id="unitlist">{% for t in tasks %}<option>{{ t.name }}</option>{% endfor %}</datalist>
+  <button type="button" class="btn s" onclick="addRow('htbl')">+ 행 추가</button>
+  <p class="ref">부담작업(호)는 2단계에서 같은 단위작업명에 체크한 호가 저장 시 자동으로 들어갑니다.</p>
+  <details class="ref"><summary>유해요인 설명</summary><ul style="margin:6px 0">{% for k in S.HAZARD_TYPES %}<li><b>{{ k }}</b>: {{ S.HAZARD_DESC[k] }}</li>{% endfor %}</ul></details>
+</div>
+
+<div class="card">
+  <p style="margin:0 0 6px"><b>(선택)</b> 인간공학적 작업·분석평가 결과 <span class="ref">— 고시 서식에는 없음. REBA 등 세부 평가를 한 경우만 작성</span></p>
+  <table class="rowtbl" id="etbl">
+    <tr><th style="width:190px">단위작업명</th><th style="width:170px">작업·분석평가 도구</th><th>평가결과</th><th style="width:180px">판정</th><th style="width:40px"></th></tr>
+    {% for e in ergo + [{}] %}
+    <tr><td><input type="text" name="e_unit" value="{{ e.unit or '' }}" list="unitlist"></td>
+      <td><select name="e_tool"><option value=""></option>{% for tl in S.ERGO_TOOLS %}<option {{ 'selected' if e.tool==tl }}>{{ tl }}</option>{% endfor %}</select></td>
+      <td><input type="text" name="e_result" value="{{ e.result or '' }}" placeholder="예: REBA 9점"></td>
+      <td><input type="text" name="e_judge" value="{{ e.judge or '' }}" placeholder="예: 높음, 곧 개선 필요"></td>
+      <td><button type="button" class="btn s" onclick="this.closest('tr').remove()">×</button></td></tr>
+    {% endfor %}
+  </table>
+  <button type="button" class="btn s" onclick="addRow('etbl')">+ 행 추가</button>
+</div>
+
+<div class="card">
+  <h2 class="lg">(선택) 조사자 의견 · 결과요약</h2>
+  <p class="ref" style="margin-top:0">고시 서식에는 없지만 보고서 작성에 씁니다. 비워두면 부담작업·점수·유해요인으로 자동 작성됩니다.</p>
+  <label class="f">결과요약 <span class="ref">— 작업장 상황·작업조건·분석평가 결과를 바탕으로 주요 유해요인과 개선방안</span></label>
+  <textarea name="summary" style="min-height:90px">{{ a.summary or '' if a else '' }}</textarea>
+  <label class="f">비고(내부 메모)</label><textarea name="note">{{ a.note if a and a.note else '' }}</textarea>
+</div>
+
+<div class="savebar"><button class="btn p bigbtn">💾 저장</button> <a class="btn bigbtn" href="{{ url_for('jobs') }}">목록</a>
+  <a class="btn bigbtn" href="{{ url_for('improvements', job=job.id) }}">개선계획 →</a></div>
+</form>
+
+{% if rs %}
+<div class="card"><h2>이 작업 응답자 증상 (별지 제2호 결과)</h2><table>
+  <tr><th>성명</th><th>전체 결과</th>{% for p in S.PARTS %}<th>{{ S.label('part', p) }}</th>{% endfor %}<th>의견</th></tr>
+  {% for r in rs %}{% set pl = r.part_levels %}
+  <tr><td><a href="{{ url_for('response_detail', rid=r.id) }}">{{ r.name }}</a></td><td><span class="badge b-{{ r.top_level or 'none' }}">{{ S.KOSHA_KO[r.top_level] }}</span></td>
+    {% for p in S.PARTS %}<td>{% if pl.get(p) in ('manage','pain') %}<span class="badge b-{{ pl[p] }}">{{ S.KOSHA_KO[pl[p]] }}</span>{% else %}<span class="mut">정상</span>{% endif %}</td>{% endfor %}
+    <td>{{ r.opinion_ko or '' }}</td></tr>
+  {% endfor %}
+</table></div>
+{% endif %}
+
+<script>
+function calc(){ document.querySelectorAll('.unit').forEach((u, i) => {
+  const s = u.querySelectorAll('select.sc'); const v = (+s[0].value||0) * (+s[1].value||0);
+  u.querySelector('.tot').textContent = v || '-'; u.querySelector('.no').textContent = i + 1; }); }
+function applyAvg(btn, a, b){ const s = btn.closest('.unit').querySelectorAll('select.sc'); s[0].value = String(Math.round(a)); s[1].value = String(Math.round(b)); calc(); }
+function shrink(file){ return new Promise(res => { const img = new Image(), url = URL.createObjectURL(file);
+  img.onload = () => { const M = 1600, k = Math.min(1, M / Math.max(img.width, img.height)), c = document.createElement('canvas');
+    c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    URL.revokeObjectURL(url); c.toBlob(b => res(b || file), 'image/jpeg', 0.82); };
+  img.onerror = () => res(file); img.src = url; }); }
+document.getElementById('ph_unit').addEventListener('change', e => document.getElementById('ph_cap').classList.toggle('hide', e.target.value !== '__etc'));
+async function upPhotos(inp){
+  const u = document.getElementById('ph_unit').value, cap = u === '__etc' ? document.getElementById('ph_cap').value : u, msg = document.getElementById('ph_msg');
+  const files = [...inp.files]; let n = 0;
+  for (const f of files) {
+    msg.textContent = `업로드 중… ${++n}/${files.length}`;
+    const fd = new FormData(); fd.append('photo', await shrink(f), 'photo.jpg'); fd.append('caption', cap || '작업 사진');
+    try { const r = await fetch('{{ url_for('photo_upload', jid=job.id) }}', {method: 'POST', body: fd}); const j = await r.json();
+      const fig = document.createElement('figure'); fig.dataset.id = j.id;
+      fig.innerHTML = `<img src="${j.url}" onclick="window.open(this.src)"><figcaption class="ref"></figcaption>`;
+      fig.querySelector('figcaption').textContent = j.caption + ' ';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn s d'; b.textContent = '삭제'; b.onclick = () => delPhoto(b, j.delete);
+      fig.querySelector('figcaption').appendChild(b); document.getElementById('photos').appendChild(fig);
+    } catch (e) { msg.textContent = '업로드 실패 — 네트워크를 확인하세요'; return; }
+  }
+  msg.textContent = `✓ ${files.length}장 저장됨`; inp.value = '';
+}
+async function delPhoto(btn, url){ if (!confirm('사진을 삭제할까요?')) return;
+  await fetch(url, {method: 'POST', headers: {'X-Requested-With': 'fetch'}}); btn.closest('figure').remove(); }
+function applySug(btn, items){ const u = btn.closest('.unit'); items.forEach(n => { const c = u.querySelector('.bwchk[data-n="'+n+'"]'); if (c) c.checked = true; }); }
+function addHz(task, type, cause){ const t = document.getElementById('htbl'); let row = [...t.rows].slice(1).find(r => !r.querySelector('[name=h_task]').value && !r.querySelector('[name=h_cause]').value);
+  if (!row) { addRow('htbl'); row = t.rows[t.rows.length-1]; }
+  row.querySelector('[name=h_task]').value = task; if (type) row.querySelector('[name=h_type]').value = type; row.querySelector('[name=h_cause]').value = cause;
+  row.scrollIntoView({block:'center'}); }
+function renumber(){ document.querySelectorAll('.unit').forEach((u, i) => u.querySelectorAll('.bwchk').forEach(c => c.name = 't_' + i + '_' + c.dataset.n)); }
+function addUnit(){ const box = document.getElementById('units'), last = box.lastElementChild, c = last.cloneNode(true);
+  c.querySelectorAll('input[type=text],input[type=number]').forEach(e => e.value = ''); c.querySelectorAll('select').forEach(e => e.value = '');
+  c.querySelectorAll('input[type=checkbox]').forEach(e => e.checked = false); box.appendChild(c); renumber(); calc(); c.querySelector('.uname').focus(); }
+function delUnit(btn){ const box = document.getElementById('units'), u = btn.closest('.unit');
+  if (box.children.length > 1) u.remove(); else { u.querySelectorAll('input[type=text]').forEach(e => e.value=''); u.querySelectorAll('select').forEach(e => e.value=''); u.querySelectorAll('input[type=checkbox]').forEach(e => e.checked=false); }
+  renumber(); calc(); }
+document.querySelector('form').addEventListener('submit', renumber);
+function addRow(id){ const t = document.getElementById(id), last = t.rows[t.rows.length-1], c = last.cloneNode(true);
+  c.querySelectorAll('input,select').forEach(e => { e.value = ''; }); c.querySelectorAll('td.ref').forEach(e => e.textContent = '');
+  t.tBodies[0].appendChild(c); calc(); }
+document.addEventListener('change', calc); calc();
+</script>
+{% endblock %}

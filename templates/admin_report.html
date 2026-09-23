@@ -1,0 +1,26 @@
+{% extends 'admin_base.html' %}
+{% block body %}
+<h1>정기보고서 — {{ rnd.title }}</h1>
+<div class="card">
+  <h2>보고서 내려받기</h2>
+  <p>
+    <a class="btn p" href="{{ url_for('report_xlsx') }}">📊 결과보고서 Excel</a>
+    <a class="btn p" href="{{ url_for('report_pdf') }}">📄 결과보고서 PDF</a>
+    <a class="btn" href="{{ url_for('responses_xlsx') }}">증상조사 원자료 Excel</a>
+  </p>
+  <p class="mut">구성: 표지 → <b>결과 요약(1쪽)</b> → 1. 조사 개요 → 2. 부담작업 체크리스트 → 3. 유해요인조사표(작업별, 별지 제1호) → 4. 증상조사 결과(별지 제2호, KOSHA 결과표 포함) → <b>5. 종합판정(2×2·부위 부합성·개인요인)</b> → 6. 작업환경 개선계획서(사업주·근로자대표 확인) → 7. 종합의견 (Excel은 원자료·작업별 응답 시트 포함)</p>
+</div>
+
+<div class="card">
+  <h2>작성 준비 상태</h2>
+  <table>
+    <tr><td>조사 회차 정보(기간·조사자)</td><td>{% if rnd.start_date and rnd.investigator %}✅{% else %}⚠️ <a href="{{ url_for('rounds', edit=rnd.id) }}">회차 정보 입력</a>{% endif %}</td></tr>
+    <tr><td>증상조사 응답</td><td>{{ '✅' if A.n else '⚠️' }} {{ A.n }}명{% if A.target_workers %} / 대상 {{ A.target_workers }}명 (응답률 {{ (A.n*100/A.target_workers)|round(1) }}%){% endif %}</td></tr>
+    <tr><td>유해요인조사표</td><td>{% if missing %}⚠️ 미작성 {{ missing|length }}개 작업:
+      {% for x in missing %}<a href="{{ url_for('assess', jid=x.job.id) }}">{{ x.job.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% else %}✅ 전체 작성{% endif %}</td></tr>
+    <tr><td>개선계획서</td><td>{% if A.improvements %}✅ {{ A.improvements|length }}건{% elif A.ranked %}⚠️ 우선순위 작업 {{ A.ranked|length }}개에 대한 개선계획 없음 → <a href="{{ url_for('improvements') }}">작성</a>{% else %}- (부담작업·관리대상자 발생 작업 없음){% endif %}</td></tr>
+    <tr><td>관리대상자·통증호소자 사후관리</td><td>{% set pend = (A.pain_list + A.manage_list)|rejectattr('followup')|list %}{% if pend %}⚠️ 미조치 {{ pend|length }}명 → <a href="{{ url_for('responses', level='manage') }}">명단</a>{% else %}✅{% endif %}</td></tr>
+  </table>
+  <p class="mut">미완료 항목이 있어도 보고서는 생성됩니다(빈 칸으로 표시).</p>
+</div>
+{% endblock %}

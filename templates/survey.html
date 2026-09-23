@@ -1,0 +1,221 @@
+{% extends 'survey_base.html' %}
+{% macro radios(name, codes, prefix, req=False, col=False) -%}
+<div class="opts {{ 'col' if col }}">
+{% for c in codes %}<label><input type="radio" name="{{ name }}" value="{{ c }}" {{ 'required' if req }} {{ 'checked' if form.get(name)==c }}> {{ t[prefix ~ '_' ~ c] }}</label>{% endfor %}
+</div>
+{%- endmacro %}
+{% macro checks(name, codes, prefix) -%}
+<div class="opts">
+{% for c in codes %}<label><input type="checkbox" name="{{ name }}" value="{{ c }}" {{ 'checked' if c in form.getlist(name) }}> {{ t[prefix ~ '_' ~ c] }}</label>{% endfor %}
+</div>
+{%- endmacro %}
+{% macro yn(name, req=True) -%}
+<div class="opts">
+<label><input type="radio" name="{{ name }}" value="N" {{ 'required' if req }} {{ 'checked' if form.get(name)=='N' }}> {{ t.no }}</label>
+<label><input type="radio" name="{{ name }}" value="Y" {{ 'checked' if form.get(name)=='Y' }}> {{ t.yes }}</label>
+</div>
+{%- endmacro %}
+{% block body %}
+{% if preview %}<div class="err" style="background:#fffaeb;color:#93370d;border-color:#fedf89">관리자 미리보기 — 직원에게 보이는 화면과 같습니다. 제출해도 저장되지 않습니다. {% with m = get_flashed_messages() %}{% for x in m %}<br><b>{{ x }}</b>{% endfor %}{% endwith %}</div>{% endif %}
+{% if mine %}<div class="card" style="border:2px solid #abefc6;background:#ecfdf3"><b style="color:#067647">✓ {{ t.already }}</b> — {{ mine.name }} · {{ kst(mine.created_at).strftime('%Y-%m-%d %H:%M') }}<br><span class="hint">{{ t.already_body }}</span></div>{% endif %}
+<p class="hint">{{ rnd.title }}</p>
+<div class="card"><p style="margin:0">{{ t.intro }}</p></div>
+{% if error %}<div class="err">{{ error }}</div>{% endif %}
+<form method="post" id="f" novalidate>
+<input type="hidden" name="lang" value="{{ lang }}">
+
+<div class="card">
+  <h2>{{ t.consent_title }}</h2>
+  <div class="consent">{{ t.consent_body }}</div>
+  <div class="opts" style="margin-top:8px"><label><input type="checkbox" name="consent" value="1" required {{ 'checked' if form.get('consent') }}> {{ t.consent_agree }}</label></div>
+</div>
+
+<div class="card">
+  <h2>{{ t.section1 }}</h2>
+  <label class="f req">{{ t.name }}</label>
+  <select name="employee_id" id="emp">
+    <option value="">{{ t.name_pick }}</option>
+  </select>
+  <input type="text" name="name" id="name_in" class="hide" placeholder="{{ t.name_type }}" value="{{ form.get('name','') }}" style="margin-top:6px">
+  <label class="f req">{{ t.age }}</label>
+  <div class="row"><input type="number" name="age" min="15" max="90" required inputmode="numeric" value="{{ form.get('age','') }}"><span>{{ t.age_unit }}</span></div>
+  <label class="f req">{{ t.sex }}</label>{{ radios('sex', S.SEX, 'sex', True) }}
+  <label class="f">{{ t.career }}</label>
+  <div class="row"><input type="number" name="career_y" min="0" max="60" inputmode="numeric" value="{{ form.get('career_y','') }}"><span>{{ t.years }}</span>
+    <input type="number" name="career_m" min="0" max="11" inputmode="numeric" value="{{ form.get('career_m','') }}"><span>{{ t.months }}</span></div>
+  <label class="f req">{{ t.dept }}</label>
+  <select name="dept" id="dept" required>
+    <option value="">{{ t.select }}</option>
+    {% for d in depts %}<option {{ 'selected' if form.get('dept')==d }}>{{ d }}</option>{% endfor %}
+  </select>
+  <label class="f">{{ t.job }}</label>
+  <select name="job_id" id="job"><option value="">{{ t.select }}</option></select>
+  <input type="text" name="job_other" placeholder="{{ t.job_other }}" style="margin-top:6px" value="{{ form.get('job_other','') }}">
+  <label class="f">{{ t.married }}</label>{{ radios('married', S.MARRIED, 'married') }}
+  <label class="f">{{ t.cur_task }}</label><input type="text" name="cur_task" value="{{ form.get('cur_task','') }}">
+  <label class="f">{{ t.cur_period }}</label>
+  <div class="row"><input type="number" name="cur_y" min="0" inputmode="numeric" value="{{ form.get('cur_y','') }}"><span>{{ t.years }}</span>
+    <input type="number" name="cur_m" min="0" max="11" inputmode="numeric" value="{{ form.get('cur_m','') }}"><span>{{ t.months }}</span></div>
+  <label class="f">{{ t.work_hours }}</label>
+  <div class="row"><input type="number" name="work_hours" min="0" max="24" step="0.5" inputmode="decimal" value="{{ form.get('work_hours','') }}"><span>{{ t.hours }}</span></div>
+  <label class="f">{{ t.rest }}</label>
+  <div class="row"><input type="number" name="rest_min" min="0" inputmode="numeric" value="{{ form.get('rest_min','') }}"><span>{{ t.rest_min }}</span>
+    <input type="number" name="rest_times" min="0" inputmode="numeric" value="{{ form.get('rest_times','') }}"><span>{{ t.rest_times }}</span></div>
+  <label class="f">{{ t.prev_task }}</label><input type="text" name="prev_task" value="{{ form.get('prev_task','') }}">
+  <label class="f">{{ t.prev_period }}</label>
+  <div class="row"><input type="number" name="prev_y" min="0" inputmode="numeric" value="{{ form.get('prev_y','') }}"><span>{{ t.years }}</span>
+    <input type="number" name="prev_m" min="0" max="11" inputmode="numeric" value="{{ form.get('prev_m','') }}"><span>{{ t.months }}</span></div>
+
+  <div class="q">{{ t.q1 }}</div>{{ checks('hobby', S.HOBBY, 'hobby') }}
+  <div class="q">{{ t.q2 }}</div>{{ radios('housework', S.HOUSEWORK, 'housework') }}
+  <div class="q">{{ t.q3 }}</div>
+  <div class="hint">{% for d in S.DISEASE %}{{ t['disease_' ~ d] }}{{ ', ' if not loop.last }}{% endfor %}</div>
+  {{ yn('disease_yn', False) }}
+  <div id="disease_box" class="hide">
+    <div class="hint">{{ t.q3_which }}</div>{{ checks('disease', S.DISEASE, 'disease') }}
+    <div class="hint" style="margin-top:6px">{{ t.q3_status }}</div>{{ radios('disease_status', S.DISEASE_STATUS, 'dstatus') }}
+  </div>
+  <div class="q">{{ t.q4 }}</div>{{ yn('injury_yn', False) }}
+  <div id="injury_box" class="hide"><div class="hint">{{ t.q4_which }}</div>{{ checks('injury', S.INJURY_PARTS, 'injury') }}</div>
+  <div class="q">{{ t.q5 }}</div>{{ radios('burden', S.BURDEN, 'burden') }}
+</div>
+
+<div class="card" id="units_card">
+  <h2>{{ t.section3 }}</h2>
+  <p class="hint" style="margin-top:0">{{ t.units_q }}</p>
+  <div id="units_box"><p class="hint">{{ t.units_none }}</p></div>
+</div>
+
+<div class="card">
+  <h2>{{ t.section2 }}</h2>
+  <div class="q req">{{ t.q_pain }}</div>
+  {{ yn('has_pain') }}
+  <div class="hint">{{ t.pain_no_note }}</div>
+  <div id="pain_box" class="hide">
+    <div class="q">{{ t.pain_parts }}</div>
+    <div class="opts">
+    {% for p in S.PARTS %}<label><input type="checkbox" name="part_{{ p }}" value="1" class="partchk" data-part="{{ p }}" {{ 'checked' if form.get('part_' ~ p) }}> {{ t['part_' ~ p] }}</label>{% endfor %}
+    </div>
+    {% for p in S.PARTS %}
+    <div class="part hide" id="box_{{ p }}">
+      <h3>{{ t['part_' ~ p] }}</h3>
+      {% if p in S.SIDED_PARTS %}<div class="q">{{ t.p1 }}</div>{{ radios(p ~ '_side', S.SIDES, 'side') }}{% endif %}
+      <div class="q req">{{ t.p2 }}</div>{{ radios(p ~ '_duration', S.DURATION, 'dur', col=True) }}
+      <div class="q req">{{ t.p3 }}</div>
+      <div class="opts col">
+      {% for c in S.INTENSITY %}<label><input type="radio" name="{{ p }}_intensity" value="{{ c }}" {{ 'checked' if form.get(p ~ '_intensity')==c }}> <span><b>{{ t['int_' ~ c] }}</b><br><span class="hint">{{ t['int_' ~ c ~ '_desc'] }}</span></span></label>{% endfor %}
+      </div>
+      <div class="q req">{{ t.p4 }}</div>{{ radios(p ~ '_frequency', S.FREQUENCY, 'freq', col=True) }}
+      <div class="q">{{ t.p5 }}</div>{{ yn(p ~ '_lastweek', False) }}
+      <div class="q">{{ t.p6 }}</div>{{ checks(p ~ '_conseq', S.CONSEQ, 'cq') }}
+      <input type="text" name="{{ p }}_other" placeholder="{{ t.cq_other_text }}" style="margin-top:6px" value="{{ form.get(p ~ '_other','') }}">
+    </div>
+    {% endfor %}
+  </div>
+  <label class="f">{{ t.opinion }}</label><textarea name="opinion">{{ form.get('opinion','') }}</textarea>
+</div>
+
+<div class="card consent"><b>{{ t.notice_title }}</b><br>· {{ t.notice_1 }}<br>· {{ t.notice_2 }}<br>· {{ t.notice_3 }}</div>
+<div id="jserr" class="err hide"></div>
+<button class="submit" type="submit">{{ t.submit }}</button>
+</form>
+
+<script>
+const JOBS = {{ jobs_js|tojson }};
+const SEL_JOB = "{{ form.get('job_id','') }}";
+const TX = {req: {{ t.err_required|tojson }}, part: {{ t.err_part|tojson }}, consent: {{ t.err_consent|tojson }}, sel: {{ t.select|tojson }}};
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)];
+function fillJobs(){
+  const d = $('#dept').value, j = $('#job');
+  j.innerHTML = '<option value="">'+TX.sel+'</option>';
+  JOBS.filter(x => x.dept === d).forEach(x => { const o = new Option(x.name, x.id); if (String(x.id)===SEL_JOB) o.selected = true; j.add(o); });
+}
+const EMPS = {{ emps_js|tojson }};
+const SEL_EMP = "{{ form.get('employee_id','') }}";
+(function fillEmps(){
+  const sel = $('#emp'); let grp = null, cur = null;
+  EMPS.forEach(e => { if (e.dept !== cur) { cur = e.dept; grp = document.createElement('optgroup'); grp.label = cur || '-'; sel.appendChild(grp); }
+    const o = new Option(e.name + (e.pos ? ' (' + e.pos + ')' : ''), e.id); if (String(e.id) === SEL_EMP) o.selected = true; grp.appendChild(o); });
+  const other = new Option({{ t.name_other|tojson }}, 'other'); if (SEL_EMP === 'other') other.selected = true; sel.appendChild(other);
+})();
+function onEmp(first){
+  const v = $('#emp').value, ni = $('#name_in');
+  ni.classList.toggle('hide', v !== 'other');
+  if (v === 'other') { if (!first) ni.value = ''; ni.focus && !first && ni.focus(); return; }
+  const e = EMPS.find(x => String(x.id) === v);
+  ni.value = e ? e.name : '';
+  if (e && !first) { $('#dept').value = e.dept; fillJobs(); $('#job').value = String(e.job_id || ''); fillUnits(); }
+}
+$('#emp').addEventListener('change', () => onEmp(false));
+const FORM_U = {{ form_units|tojson }};
+const UQ = {hrs: {codes: {{ S.U_HRS|tojson }}, labels: [{% for c in S.U_HRS %}{{ t['u_hrs_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_hrs_q|tojson }}},
+            wt: {codes: {{ S.U_WT|tojson }}, labels: [{% for c in S.U_WT %}{{ t['u_wt_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_wt_q|tojson }}},
+            cnt: {codes: {{ S.U_CNT|tojson }}, labels: [{% for c in S.U_CNT %}{{ t['u_cnt_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_cnt_q|tojson }}},
+            pos: {codes: {{ S.U_POS|tojson }}, labels: [{% for c in S.U_POS %}{{ t['u_pos_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_pos_q|tojson }}},
+            hz: {codes: {{ S.U_HZ|tojson }}, labels: [{% for c in S.U_HZ %}{{ t['u_hz_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_hz_q|tojson }}},
+            hzt: {{ t.u_hzt|tojson }}, sel: {{ t.select|tojson }}};
+function rad(name, grp){ return '<div class="opts">' + grp.codes.map((c,k) =>
+  `<label><input type="radio" name="${name}" value="${c}" ${FORM_U[name]===c?'checked':''}> ${esc(grp.labels[k])}</label>`).join('') + '</div>'; }
+function chk(name, grp){ return '<div class="opts">' + grp.codes.map((c,k) =>
+  `<label><input type="checkbox" name="${name}" value="${c}"> ${esc(grp.labels[k])}</label>`).join('') + '</div>'; }
+function sel(name, grp){ return `<select name="${name}"><option value="">${esc(UQ.sel)}</option>` + grp.codes.map((c,k) =>
+  `<option value="${c}" ${FORM_U[name]===c?'selected':''}>${esc(grp.labels[k])}</option>`).join('') + '</select>'; }
+const LBL = {load: [{% for n in range(1,6) %}{{ t['load_' ~ n]|tojson }}{{ ',' if not loop.last }}{% endfor %}],
+             freq: [{% for n in range(1,6) %}{{ t['wfreq_' ~ n]|tojson }}{{ ',' if not loop.last }}{% endfor %}],
+             lq: {{ t.load_q|tojson }}, fq: {{ t.freq_q|tojson }}, none: {{ t.units_none|tojson }}, err: {{ t.err_unit|tojson }}};
+const esc = s => String(s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function radios(name, labels){ return '<div class="opts col">' + labels.map((l,k) =>
+  `<label><input type="radio" name="${name}" value="${k+1}" ${FORM_U[name]==String(k+1)?'checked':''}> ${k+1}. ${esc(l)}</label>`).join('') + '</div>'; }
+function fillUnits(){
+  const job = JOBS.find(x => String(x.id) === $('#job').value), box = $('#units_box');
+  if (!job || !job.units.length) { box.innerHTML = '<p class="hint">'+esc(LBL.none)+'</p>'; $('#units_card').classList.toggle('hide', !!job); return; }
+  $('#units_card').classList.remove('hide');
+  box.innerHTML = job.units.map(u => `
+    <div class="part" style="border-width:1px">
+      <label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer">
+        <input type="checkbox" name="u_${u.i}" value="1" class="uchk" data-i="${u.i}" style="width:22px;height:22px;margin-top:2px" ${FORM_U['u_'+u.i]?'checked':''}>
+        <span><b>${esc(u.tname || u.name)}</b>${u.tname ? ' <span class="hint">('+esc(u.name)+')</span>' : ''}
+          ${u.loc ? '<br><span class="hint">'+esc(u.loc)+'</span>' : ''}
+          ${(u.tdesc || u.desc) ? '<br><span class="hint">'+esc(u.tdesc || u.desc)+'</span>' : ''}</span></label>
+      <div class="ubody hide" id="ub_${u.i}">
+        <div class="q">${esc(LBL.lq)}</div>${radios('u_'+u.i+'_load', LBL.load)}
+        <div class="q">${esc(LBL.fq)}</div>${radios('u_'+u.i+'_freq', LBL.freq)}
+        <div class="q">${esc(UQ.hrs.q)}</div>${rad('u_'+u.i+'_hrs', UQ.hrs)}
+        <div class="q">${esc(UQ.wt.q)}</div>${sel('u_'+u.i+'_wt', UQ.wt)}
+        <div class="q">${esc(UQ.cnt.q)}</div>${sel('u_'+u.i+'_cnt', UQ.cnt)}
+        <div class="q">${esc(UQ.pos.q)}</div>${chk('u_'+u.i+'_pos', UQ.pos)}
+        <div class="q">${esc(UQ.hz.q)}</div>${sel('u_'+u.i+'_hz', UQ.hz)}
+        <input type="text" name="u_${u.i}_hzt" placeholder="${esc(UQ.hzt)}" style="margin-top:6px" value="${esc(FORM_U['u_'+u.i+'_hzt']||'')}">
+      </div>
+    </div>`).join('');
+  syncUnits();
+}
+function syncUnits(){ $$('.uchk').forEach(c => $('#ub_'+c.dataset.i).classList.toggle('hide', !c.checked)); }
+$('#dept').addEventListener('change', () => { fillJobs(); const opts = JOBS.filter(x => x.dept === $('#dept').value);
+  if (opts.length === 1) $('#job').value = String(opts[0].id); fillUnits(); });
+$('#job').addEventListener('change', fillUnits);
+document.addEventListener('change', e => { if (e.target.classList.contains('uchk')) syncUnits(); });
+fillJobs(); { const opts = JOBS.filter(x => x.dept === $('#dept').value); if (opts.length === 1 && !$('#job').value) $('#job').value = String(opts[0].id); } fillUnits(); onEmp(true);
+function val(n){ const e = $(`input[name="${n}"]:checked`); return e ? e.value : ''; }
+function sync(){
+  $('#disease_box').classList.toggle('hide', val('disease_yn') !== 'Y');
+  $('#injury_box').classList.toggle('hide', val('injury_yn') !== 'Y');
+  $('#pain_box').classList.toggle('hide', val('has_pain') !== 'Y');
+  $$('.partchk').forEach(c => $('#box_'+c.dataset.part).classList.toggle('hide', !c.checked));
+}
+document.addEventListener('change', sync); sync();
+$('#f').addEventListener('submit', e => {
+  let msg = '';
+  if (!$('input[name=consent]').checked) msg = TX.consent;
+  else if ($$('.uchk').some(c => c.checked && (!val('u_'+c.dataset.i+'_load') || !val('u_'+c.dataset.i+'_freq') || !val('u_'+c.dataset.i+'_hrs')))) msg = LBL.err;
+  else if (!$('input[name=name]').value.trim() || !$('input[name=age]').value || !val('sex') || !$('#dept').value || !val('has_pain')) msg = TX.req;
+  else if (val('has_pain') === 'Y') {
+    const parts = $$('.partchk').filter(c => c.checked).map(c => c.dataset.part);
+    if (!parts.length) msg = TX.part;
+    else if (parts.some(p => !val(p+'_duration') || !val(p+'_intensity') || !val(p+'_frequency'))) msg = TX.req;
+  }
+  if (msg) { e.preventDefault(); const b = $('#jserr'); b.textContent = msg; b.classList.remove('hide'); b.scrollIntoView({block:'center'}); }
+  else { const btn = e.target.querySelector('button'); btn.disabled = true; btn.style.opacity = .6; }
+});
+</script>
+{% endblock %}

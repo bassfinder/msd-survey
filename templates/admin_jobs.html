@@ -1,0 +1,46 @@
+{% extends 'admin_base.html' %}
+{% block body %}
+<h1>작업 마스터 · 유해요인조사표 <a class="btn s" href="{{ url_for('employees') }}" style="vertical-align:middle">직원명단 관리</a></h1>
+<div class="card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center">
+  <b>기본 데이터 옮기기</b> <span class="mut">(작업·단위작업·번역·직원명단 — PC에서 서버로 옮길 때)</span>
+  <a class="btn" href="{{ url_for('master_export') }}">⬇ 내보내기(JSON)</a>
+  <form method="post" action="{{ url_for('master_import') }}" enctype="multipart/form-data" style="display:flex;gap:6px;align-items:center" onsubmit="return confirm('같은 부서·작업은 덮어쓰고, 직원명단은 파일 내용으로 교체합니다. 진행할까요?')">
+    <input type="file" name="master" accept=".json" required><button class="btn p">⬆ 가져오기</button></form>
+</div>
+<p class="mut">여기 등록한 부서/작업이 직원 설문의 '작업부서·수행작업' 선택지가 됩니다. 작업별로 <b>유해요인조사표([별지 제1호서식], 단위작업별 부담작업 체크 포함)</b>를 작성하세요{% if rnd %} (현재 회차: {{ rnd.title }}){% endif %}.</p>
+<div class="card tbl-wrap">
+  <table>
+    <tr><th>부서</th><th>공정</th><th>작업명</th><th class="n">작업자수</th><th>단위작업</th><th>부담작업(호)</th><th class="n">A×B 최고</th><th>유해요인조사표</th><th>상태</th><th></th></tr>
+    {% for j in rows %}{% set a = amap.get(j.id) %}
+    <tr style="{{ 'opacity:.5' if not j.active }}"><td>{{ j.dept }}</td><td>{{ j.process or '' }}</td><td>{{ j.name }}</td><td class="n">{{ j.workers or '' }}</td>
+      <td class="mut" style="font-size:12px">{{ j.unit_list|map(attribute='name')|join(', ') }}</td>
+      <td>{{ (a.burden_items|join(', ') or '비해당') if a else '' }}</td><td class="n">{{ a.max_score if a else '' }}</td>
+      <td>{% if rnd %}<a class="btn s {{ '' if a else 'p' }}" href="{{ url_for('assess', jid=j.id) }}">{{ '보기/수정' if a else '작성' }}</a>{% endif %}</td>
+      <td>{{ '사용' if j.active else '비활성' }}</td>
+      <td><a class="btn s" href="?edit={{ j.id }}">수정</a>
+        <form class="inline" method="post" action="{{ url_for('job_delete', jid=j.id) }}" onsubmit="return confirm('삭제할까요?')"><button class="btn s d">삭제</button></form></td></tr>
+    {% else %}<tr><td colspan="10" class="mut">등록된 작업이 없습니다.</td></tr>{% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2>{{ '작업 수정' if edit else '작업 추가' }}</h2>
+  <form method="post">
+    <input type="hidden" name="id" value="{{ edit.id if edit else '' }}">
+    <div class="frm">
+      <div><label class="f">부서 *</label><input type="text" name="dept" required value="{{ edit.dept if edit else '' }}" list="deptlist"></div>
+      <datalist id="deptlist">{% for d in rows|map(attribute='dept')|unique %}<option>{{ d }}</option>{% endfor %}</datalist>
+      <div><label class="f">공정</label><input type="text" name="process" value="{{ edit.process or '' if edit else '' }}"></div>
+      <div><label class="f">작업명 *</label><input type="text" name="name" required value="{{ edit.name if edit else '' }}"></div>
+      <div><label class="f">작업자 수</label><input type="number" name="workers" value="{{ edit.workers or '' if edit else '' }}"></div>
+      <div><label class="f">정렬순서</label><input type="number" name="sort" value="{{ edit.sort if edit else 0 }}"></div>
+      <div><label class="f">사용</label><label><input type="checkbox" name="active" value="1" {{ 'checked' if not edit or edit.active }}> 설문 선택지에 표시</label></div>
+      <div class="full"><label class="f">작업 설명</label><textarea name="description">{{ edit.description or '' if edit else '' }}</textarea></div>
+      <div class="full"><label class="f">단위작업 목록 <span class="mut" style="font-weight:400">— 한 줄에 하나: <b>공정명(작업명) | 위치 | 작업내용</b>. 직원이 폰 설문에서 체크하고, 유해요인조사표 2단계에 자동으로 들어갑니다.</span></label>
+        <textarea name="units_text" style="min-height:160px;font-family:inherit">{% if edit %}{% for u in edit.unit_list %}{{ u.name }} | {{ u.loc }} | {{ u.desc }}
+{% endfor %}{% endif %}</textarea>
+        <p class="mut" style="margin:2px 0 0;font-size:12px">저장하면 외국어 번역도 함께 만듭니다(구글 번역이 막혀 있으면 한국어로 표시).</p></div>
+    </div>
+    <p><button class="btn p">저장</button> {% if edit %}<a class="btn" href="{{ url_for('jobs') }}">취소</a>{% endif %}</p>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,45 @@
+{% extends 'admin_base.html' %}
+{% block body %}
+<h1>작업환경 개선계획서</h1>
+{% set m = edit or prefill or {} %}
+<div class="card tbl-wrap">
+<table>
+  <tr><th class="n">순위</th><th>공정/작업</th><th>문제점(유해요인의 원인)</th><th>근로자 의견</th><th>개선방안</th><th>추진일정</th><th class="n">비용(천원)</th><th>상태</th><th></th></tr>
+  {% for x in rows %}
+  <tr><td class="n">{{ x.priority or '' }}</td><td>{{ (x.job.dept ~ ' / ' ~ x.job.name) if x.job else '' }}</td>
+    <td style="white-space:pre-line">{{ x.problem or '' }}</td><td style="white-space:pre-line">{{ x.opinion or '' }}</td><td style="white-space:pre-line">{{ x.plan or '' }}</td>
+    <td>{{ x.schedule or '' }}</td><td class="n">{{ '{:,}'.format(x.cost) if x.cost else '' }}</td>
+    <td><span class="badge {{ 'b-complaint' if x.status=='완료' else ('b-manage' if x.status=='진행' else 'b-none') }}">{{ x.status }}</span>{% if x.done_date %}<div class="mut">{{ x.done_date }}</div>{% endif %}</td>
+    <td><a class="btn s" href="?edit={{ x.id }}">수정</a>
+      <form class="inline" method="post" action="{{ url_for('improvement_delete', iid=x.id) }}" onsubmit="return confirm('삭제?')"><button class="btn s d">삭제</button></form></td></tr>
+  {% else %}<tr><td colspan="9" class="mut">아직 개선계획이 없습니다. 대시보드의 우선순위 표에서 [개선계획 +]를 누르면 문제점·근로자 의견이 자동으로 채워집니다.</td></tr>{% endfor %}
+</table>
+</div>
+
+{% if A.ranked %}
+<div class="card"><h2>개선 우선순위(제안)</h2>
+  {% for x in A.ranked %}<a class="btn s" href="?job={{ x.job.id }}" style="margin:2px">{{ x.rank }}. {{ x.job.name }} (통증호소 {{ x.pain }}·관리대상 {{ x.manage }}·점수 {{ x.score }})</a>{% endfor %}
+</div>
+{% endif %}
+
+<div class="card">
+  <h2>{{ '개선계획 수정' if edit else '개선계획 추가' }}</h2>
+  <form method="post">
+    <input type="hidden" name="id" value="{{ edit.id if edit else '' }}">
+    <div class="frm">
+      <div class="full"><label class="f">대상 작업</label><select name="job_id"><option value="">(선택)</option>
+        {% for j in jobs_all %}<option value="{{ j.id }}" {{ 'selected' if m.job_id==j.id }}>{{ j.dept }} / {{ j.name }}</option>{% endfor %}</select></div>
+      <div class="full"><label class="f">문제점(유해요인의 원인)</label><textarea name="problem">{{ m.problem or '' }}</textarea></div>
+      <div class="full"><label class="f">근로자 의견</label><textarea name="opinion">{{ m.opinion or '' }}</textarea></div>
+      <div class="full"><label class="f">개선방안</label><textarea name="plan">{{ m.plan or '' }}</textarea></div>
+      <div><label class="f">추진일정</label><input type="text" name="schedule" value="{{ m.schedule or '' }}" placeholder="2026.11 ~ 2026.12"></div>
+      <div><label class="f">개선비용(천원)</label><input type="number" name="cost" value="{{ m.cost or '' }}"></div>
+      <div><label class="f">개선우선순위</label><input type="number" name="priority" value="{{ m.priority or '' }}"></div>
+      <div><label class="f">상태</label><select name="status">{% for s in ['계획','진행','완료'] %}<option {{ 'selected' if (m.status or '계획')==s }}>{{ s }}</option>{% endfor %}</select></div>
+      <div><label class="f">완료일</label><input type="date" name="done_date" value="{{ m.done_date or '' }}"></div>
+      <div class="full"><label class="f">개선 결과 / 효과</label><textarea name="result">{{ m.result or '' }}</textarea></div>
+    </div>
+    <p><button class="btn p">저장</button> {% if edit or prefill %}<a class="btn" href="{{ url_for('improvements') }}">취소</a>{% endif %}</p>
+  </form>
+</div>
+{% endblock %}

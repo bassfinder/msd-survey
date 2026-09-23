@@ -1,0 +1,122 @@
+{% extends 'admin_base.html' %}
+{% block head %}<style>
+.quad{display:grid;grid-template-columns:90px 1fr 1fr;gap:6px}
+.qh{font-weight:700;text-align:center;font-size:13px;color:#475467}
+.qv{font-weight:700;font-size:13px;color:#475467;display:flex;align-items:center}
+.qb{border-radius:10px;padding:10px;min-height:90px;display:flex;flex-direction:column;gap:4px}
+.qb span.mut{font-size:12px}
+.q1{background:#fde8e8}.q2{background:#fef0c7}.q3{background:#e0eaff}.q4{background:#ecfdf3}
+.qj{display:inline-block;background:#fff;border-radius:6px;padding:3px 8px;font-size:13px;text-decoration:none;color:var(--ink);box-shadow:0 1px 1px rgba(0,0,0,.06)}
+.badge.qb1{background:#fde8e8;color:#9b1c1c}.badge.qb2{background:#fef0c7;color:#93370d}.badge.qb3{background:#e0eaff;color:#1d3a8a}.badge.qb4{background:#ecfdf3;color:#067647}.badge.qb5{background:#fde8e8;color:#9b1c1c}.badge.qb0{background:#eef1f4;color:#667085}
+.badge.qb1,.badge.qb2,.badge.qb3,.badge.qb4,.badge.qb5,.badge.qb0{display:inline-block;min-height:0;padding:1px 8px;flex-direction:row}
+table.fit td.c,table.fit th.c{text-align:center}
+td.exp{background:#eef1f4}
+b.ok{color:#067647}b.wn{color:#b54708}
+</style>{% endblock %}
+{% block body %}
+<h1>{{ rnd.title }} <span class="mut" style="font-size:14px">{{ rnd.kind }} · {{ rnd.start_date or '' }} ~ {{ rnd.end_date or '' }}
+  {% if rnd.is_open %}<span class="badge b-complaint">설문 접수중</span>{% else %}<span class="badge b-none">접수 마감</span>{% endif %}</span></h1>
+
+<div class="grid g4">
+  <div class="card kpi"><div class="l">응답자</div><div class="v">{{ A.n }}<span class="mut" style="font-size:14px"> / 대상 {{ A.target_workers or '-' }}명</span></div>
+    {% if A.target_workers %}<div class="l">응답률 {{ (A.n*100/A.target_workers)|round(1) }}%</div>{% endif %}</div>
+  <div class="card kpi"><div class="l">증상호소자</div><div class="v">{{ A.persons.complaint }}<span class="mut" style="font-size:14px"> ({{ A.persons_p.complaint }}%)</span></div></div>
+  <div class="card kpi"><div class="l">관리대상자</div><div class="v" style="color:var(--warn)">{{ A.persons.manage }}<span class="mut" style="font-size:14px"> ({{ A.persons_p.manage }}%)</span></div></div>
+  <div class="card kpi"><div class="l">통증호소자</div><div class="v" style="color:var(--red)">{{ A.persons.pain }}<span class="mut" style="font-size:14px"> ({{ A.persons_p.pain }}%)</span></div>
+    <div class="l"><a href="{{ url_for('responses', level='manage') }}">관리대상자 이상 명단 →</a></div></div>
+</div>
+
+<div class="grid g2">
+<div class="card">
+  <h2>신체부위별 증상 현황 <span class="mut" style="font-weight:400">(응답자 대비 %)</span></h2>
+  <table>
+    <tr><th>부위</th><th class="n">증상호소</th><th class="n">관리대상</th><th class="n">통증호소</th><th style="width:40%">비율</th></tr>
+    {% for p in A.parts %}
+    <tr><td>{{ p.label }}</td><td class="n">{{ p.complaint }} ({{ p.complaint_p }}%)</td><td class="n">{{ p.manage }} ({{ p.manage_p }}%)</td>
+      <td class="n">{{ p.pain }} ({{ p.pain_p }}%)</td>
+      <td><div class="bar"><i style="width:{{ p.complaint_p }}%;background:#c7d7fe"></i><i style="width:{{ p.manage_p }}%;background:#fdb022"></i><i style="width:{{ p.pain_p }}%;background:var(--red)"></i></div></td></tr>
+    {% endfor %}
+  </table>
+  <p class="mut" style="font-size:12px;margin:8px 0 0">■ 연파랑=증상호소 ■ 주황=관리대상 ■ 빨강=통증호소 · {{ S.JUDGE_TEXT.manage }} / {{ S.JUDGE_TEXT.pain }}</p>
+</div>
+<div class="card">
+  <h2>부서별 현황</h2>
+  <div class="tbl-wrap"><table>
+    <tr><th>부서</th><th class="n">응답</th><th class="n">증상호소</th><th class="n">관리대상</th><th class="n">통증호소</th></tr>
+    {% for d in A.by_dept %}
+    <tr><td>{{ d.key }}</td><td class="n">{{ d.n }}</td><td class="n">{{ d.complaint }} ({{ d.complaint_p }}%)</td><td class="n">{{ d.manage }} ({{ d.manage_p }}%)</td><td class="n">{{ d.pain }}</td></tr>
+    {% else %}<tr><td colspan="5" class="mut">응답 없음</td></tr>{% endfor %}
+  </table></div>
+</div>
+</div>
+
+<div class="card">
+  <h2>종합판정 — 유해요인조사표 × 증상조사표</h2>
+  <p class="mut" style="margin-top:-4px">가로: 유해요인(부담작업 해당 + 단위작업 최고 A×B {{ S.EXPOSURE_SCORE_HIGH }}점 이상 = 높음) · 세로: 증상(통증호소자 있음 또는 관리대상자 비율이 사업장 평균 {{ A.site_rate }}% 이상 = 많음)</p>
+  <div class="quad">
+    <div class="qh"></div><div class="qh">유해요인 높음</div><div class="qh">유해요인 낮음</div>
+    <div class="qv">증상 많음</div>
+    {% for q in (1, 3) %}<div class="qb q{{ q }}"><b>{{ S.QUADRANT[q][0] }}</b><span class="mut">{{ S.QUADRANT[q][1] }}</span>
+      {% for x in A.quad[q] %}<a class="qj" href="{{ url_for('assess', jid=x.job.id) }}" title="{{ x.why }}">{{ x.job.dept }} / {{ x.job.name }}</a>{% else %}<span class="mut">해당 없음</span>{% endfor %}</div>{% endfor %}
+    <div class="qv">증상 적음</div>
+    {% for q in (2, 4) %}<div class="qb q{{ q }}"><b>{{ S.QUADRANT[q][0] }}</b><span class="mut">{{ S.QUADRANT[q][1] }}</span>
+      {% for x in A.quad[q] %}<a class="qj" href="{{ url_for('assess', jid=x.job.id) }}" title="{{ x.why }}">{{ x.job.dept }} / {{ x.job.name }}</a>{% else %}<span class="mut">해당 없음</span>{% endfor %}</div>{% endfor %}
+  </div>
+  {% if A.quad[5] or A.quad[0] %}<p style="margin:8px 0 0">
+    {% if A.quad[5] %}<span class="badge b-pain">{{ S.QUADRANT[5][0] }}</span> {% for x in A.quad[5] %}<a href="{{ url_for('assess', jid=x.job.id) }}">{{ x.job.name }}</a>{{ ', ' if not loop.last }}{% endfor %} &nbsp; {% endif %}
+    {% if A.quad[0] %}<span class="badge b-none">{{ S.QUADRANT[0][0] }}</span> {% for x in A.quad[0] %}{{ x.job.name }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}</p>{% endif %}
+</div>
+
+<div class="card tbl-wrap">
+  <h2>신체부위 부합성 — 부담작업 관련 부위 vs 실제 증상 부위</h2>
+  <p class="mut" style="margin-top:-4px">회색 칸 = 그 작업의 부담작업(호)이 부담을 주는 부위. 숫자 = 관리대상자 / 통증호소자 수. <b>✔ 부합</b> = 유해요인 부위에 실제 증상 → 작업 관련성 근거. <b>⚠</b> = 조사표에 없는 부위의 증상 → 유해요인 재확인.</p>
+  <table class="fit">
+    <tr><th>작업</th><th>부담작업</th>{% for p in S.PARTS %}<th class="c">{{ S.label('part', p) }}</th>{% endfor %}<th>판정</th></tr>
+    {% for x in A.job_summary if x.n or x.items %}
+    <tr><td>{{ x.job.dept }} / {{ x.job.name }}</td><td>{{ x.get('items')|join(',') or '-' }}</td>
+      {% for p in S.PARTS %}{% set sp = x.sym_parts[p] %}{% set hit = sp.manage + sp.pain %}
+      <td class="c {{ 'exp' if p in x.exp_parts }}">{% if hit %}{{ sp.manage }}/{{ sp.pain }} {% if p in x.match %}<b class="ok">✔</b>{% elif p in x.unexpected and x.assess %}<b class="wn">⚠</b>{% endif %}{% elif p in x.exp_parts %}<span class="mut">-</span>{% endif %}</td>{% endfor %}
+      <td><span class="badge qb{{ x.quadrant }}">{{ x.q_label }}</span></td></tr>
+    {% endfor %}
+  </table>
+</div>
+
+<div class="card tbl-wrap">
+  <h2>개인요인 확인 — 관리대상자·통증호소자 {{ A.personal|length }}명</h2>
+  <p class="mut" style="margin-top:-4px">증상 부위와 겹치는 과거 상해·질병·취미·가사노동(증상조사표 I부)을 표시합니다. 작업 관련 부위 = 본인 작업의 부담작업 부위와 겹치는 증상 부위.</p>
+  <table>
+    <tr><th>성명</th><th>판정</th><th>작업</th><th>증상 부위</th><th>작업 관련 부위</th><th>개인요인</th><th>판단</th><th>사후관리</th></tr>
+    {% for p in A.personal %}
+    <tr><td><a href="{{ url_for('response_detail', rid=p.r.id) }}">{{ p.r.name }}</a></td><td><span class="badge b-{{ p.r.top_level }}">{{ S.KOSHA_KO[p.r.top_level] }}</span></td>
+      <td>{{ p.r.job_label }}</td><td>{% for q in p.parts %}{{ S.label('part', q) }}{{ ', ' if not loop.last }}{% endfor %}</td>
+      <td>{% for q in p.work_parts %}{{ S.label('part', q) }}{{ ', ' if not loop.last }}{% endfor %}</td>
+      <td class="mut">{{ p.flags|join(' · ') or '없음' }}</td>
+      <td><b class="{{ 'ok' if p.judge == '작업 관련성 높음' else 'wn' if '개인' in p.judge else '' }}">{{ p.judge }}</b></td>
+      <td>{{ p.r.followup or '미조치' }}</td></tr>
+    {% else %}<tr><td colspan="8" class="mut">해당자 없음</td></tr>{% endfor %}
+  </table>
+</div>
+
+<div class="card">
+  <h2>작업별 종합 · 개선 우선순위(제안)</h2>
+  <p class="mut" style="margin-top:-4px">우선순위 = 종합판정(① → ② → ※미작성 → ③ → ④) → 통증호소자 수 → 관리대상자 수 → A×B 최고점 → 노출 인원 순 (편람: 증상 호소·다수 노출·유해도 높은 작업 우선)</p>
+  <div class="tbl-wrap"><table>
+    <tr><th class="n">순위</th><th>판정</th><th>부서</th><th>작업</th><th>부담작업(호)</th><th class="n">A×B 최고</th><th class="n">응답</th><th class="n">증상호소</th><th class="n">관리대상</th><th class="n">통증호소</th><th>유해요인조사표</th><th></th></tr>
+    {% for x in A.ranked + (A.job_summary|rejectattr('rank','defined')|list) %}
+    <tr><td class="n">{{ x.rank if x.rank is defined else '-' }}</td><td><span class="badge qb{{ x.quadrant }}" title="{{ x.why }}">{{ x.q_label }}</span></td><td>{{ x.job.dept }}</td><td>{{ x.job.name }}</td>
+      <td>{{ x.get('items')|join(', ') if x.get('items') else '비해당' }}</td><td class="n">{{ x.score or '-' }}</td>
+      <td class="n">{{ x.n }}</td><td class="n">{{ x.complaint }}</td><td class="n">{{ x.manage }}</td><td class="n">{{ x.pain }}</td>
+      <td>{% if x.assess %}<a href="{{ url_for('assess', jid=x.job.id) }}">작성됨</a>{% else %}<a href="{{ url_for('assess', jid=x.job.id) }}" style="color:var(--red)">미작성</a>{% endif %}</td>
+      <td>{% if x.rank is defined %}<a class="btn s" href="{{ url_for('improvements', job=x.job.id) }}">개선계획 +</a>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="12" class="mut">작업 마스터를 먼저 등록하세요 → <a href="{{ url_for('jobs') }}">작업·유해요인조사표</a></td></tr>{% endfor %}
+  </table></div>
+</div>
+
+<div class="grid g2">
+{% for title, rows in A.general.items() %}
+<div class="card"><h2>{{ title }}</h2><table>
+  {% for k, c, p in rows %}<tr><td>{{ k }}</td><td class="n" style="width:80px">{{ c }}명</td><td class="n" style="width:70px">{{ p }}%</td></tr>{% endfor %}
+</table></div>
+{% endfor %}
+</div>
+{% endblock %}

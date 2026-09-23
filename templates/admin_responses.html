@@ -1,0 +1,37 @@
+{% extends 'admin_base.html' %}
+{% block body %}
+<h1>증상조사 응답 <span class="mut" style="font-size:14px">{{ rows|length }}건</span></h1>
+{% if total_emp %}<div class="card">
+  <h2>응답 현황 — 직원명단 {{ total_emp }}명 중 휴직·휴가 {{ leave|length }}명 제외, <span style="color:var(--red)">미응답 {{ pending|length }}명</span></h2>
+  {% if pending %}<details {{ 'open' if pending|length <= 30 }}><summary class="mut">미응답자 명단 (부서별) — 독려 대상</summary>
+    {% for d, grp in pending|groupby('dept') %}<p style="margin:6px 0"><b>{{ d }}</b> ({{ grp|list|length }}명): {% for e in grp %}{{ e.name }}{{ ', ' if not loop.last }}{% endfor %}</p>{% endfor %}
+  </details>{% else %}<p style="color:#067647;margin:0"><b>✓ 전원 응답 완료</b> — [조사회차]에서 설문을 마감하세요.</p>{% endif %}
+  <p class="mut" style="margin:6px 0 0;font-size:12px">'목록에 없음(직접 입력)'으로 낸 응답은 명단과 연결되지 않아 여기서 응답으로 집계되지 않습니다.</p>
+</div>{% endif %}
+<form class="card" method="get" style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+  <select name="dept"><option value="">전체 부서</option>{% for d in depts %}<option {{ 'selected' if d==dept }}>{{ d }}</option>{% endfor %}</select>
+  <select name="level">
+    <option value="">전체 판정</option>
+    <option value="pain" {{ 'selected' if level=='pain' }}>통증호소자</option>
+    <option value="manage" {{ 'selected' if level=='manage' }}>관리대상자 이상</option>
+    <option value="complaint" {{ 'selected' if level=='complaint' }}>증상호소자 이상</option>
+    <option value="none" {{ 'selected' if level=='none' }}>증상 없음</option>
+  </select>
+  <button class="btn">필터</button>
+  <a class="btn" href="{{ url_for('responses_xlsx') }}" style="margin-left:auto">원자료 엑셀</a>
+</form>
+<div class="card tbl-wrap">
+<table>
+  <tr><th>#</th><th>제출(KST)</th><th>성명</th><th>부서</th><th>작업</th><th class="n">연령</th><th>성별</th><th>언어</th><th>판정</th>
+    {% for p in S.PARTS %}<th>{{ S.label('part', p) }}</th>{% endfor %}<th>사후관리</th></tr>
+  {% for r in rows %}{% set pl = r.part_levels %}
+  <tr><td>{{ r.id }}</td><td>{{ kst(r.created_at).strftime('%m-%d %H:%M') }}</td>
+    <td><a href="{{ url_for('response_detail', rid=r.id) }}">{{ r.name }}</a></td><td>{{ r.dept }}</td><td>{{ r.job_label }}</td>
+    <td class="n">{{ r.age or '' }}</td><td>{{ S.label('sex', r.sex) }}</td><td>{{ S.FLAGS.get(r.lang,'') }}</td>
+    <td><span class="badge b-{{ r.top_level or 'none' }}">{{ S.LEVEL_KO[r.top_level] }}</span></td>
+    {% for p in S.PARTS %}<td>{% if pl.get(p) %}<span class="badge b-{{ pl[p] }}" title="{{ S.LEVEL_KO[pl[p]] }}">●</span>{% endif %}</td>{% endfor %}
+    <td>{{ r.followup or ('미조치' if r.top_level in ('manage','pain') else '') }}</td></tr>
+  {% else %}<tr><td colspan="16" class="mut">응답이 없습니다.</td></tr>{% endfor %}
+</table>
+</div>
+{% endblock %}

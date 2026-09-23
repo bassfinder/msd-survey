@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="근골격계 조사">
+<link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/icon-192.png') }}">
+<title>{% block title %}근골격계 조사 관리{% endblock %}</title>
+<style>
+:root{--red:#c8102e;--ink:#1d2330;--mut:#667085;--line:#e4e7ec;--bg:#f5f6f8;--card:#fff;--ok:#12805c;--warn:#b54708;--blue:#1d4ed8}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.5 system-ui,"Malgun Gothic","Noto Sans KR",sans-serif}
+.top{background:var(--ink);color:#fff;display:flex;align-items:center;gap:14px;padding:0 16px;flex-wrap:wrap}
+.top .brand{font-weight:700;padding:12px 0}
+.top nav{display:flex;flex-wrap:wrap}
+.top nav a{color:#cbd2dc;text-decoration:none;padding:13px 10px;font-size:14px}
+.top nav a.on,.top nav a:hover{color:#fff;box-shadow:inset 0 -3px var(--red)}
+.top .right{margin-left:auto;display:flex;gap:8px;align-items:center}
+.top select{padding:5px;border-radius:6px;max-width:260px}
+.top .right a{color:#cbd2dc;font-size:13px}
+main{max-width:1280px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:6px 0 14px}
+h2{font-size:16px;margin:0 0 10px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(420px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(180px,1fr))}
+.kpi .v{font-size:28px;font-weight:700}
+.kpi .l{color:var(--mut);font-size:13px}
+table{border-collapse:collapse;width:100%}
+th,td{border-bottom:1px solid var(--line);padding:7px 8px;text-align:left;vertical-align:top}
+th{background:#f9fafb;font-weight:600;font-size:13px;color:#475467;white-space:nowrap}
+td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tbl-wrap{overflow-x:auto}
+.badge{display:inline-block;padding:1px 8px;border-radius:10px;font-size:12px;font-weight:600;white-space:nowrap}
+.b-pain{background:#fde8e8;color:#9b1c1c}.b-manage{background:#fef0c7;color:#93370d}.b-complaint{background:#e0eaff;color:#1d3a8a}.b-none{background:#eef1f4;color:#667085}
+.btn{display:inline-block;padding:7px 12px;border-radius:7px;border:1px solid #cfd4dc;background:#fff;color:var(--ink);text-decoration:none;cursor:pointer;font:inherit;font-size:13px}
+.btn.p{background:var(--red);border-color:var(--red);color:#fff}
+.btn.d{color:#b42318;border-color:#fda29b}
+.btn.s{padding:3px 8px;font-size:12px}
+input[type=text],input[type=number],input[type=date],select,textarea{padding:7px;border:1px solid #cfd4dc;border-radius:6px;font:inherit;background:#fff}
+textarea{width:100%;min-height:60px}
+label.f{display:block;font-weight:600;margin:8px 0 3px;font-size:13px}
+.frm{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:4px 12px}
+.frm .full{grid-column:1/-1}
+.frm input,.frm select{width:100%}
+.flash{background:#ecfdf3;border:1px solid #abefc6;color:#067647;padding:8px 12px;border-radius:8px;margin-bottom:12px}
+.mut{color:var(--mut)}
+.bar{background:#eef1f4;border-radius:4px;height:16px;position:relative;min-width:80px}
+.bar i{position:absolute;left:0;top:0;bottom:0;border-radius:4px}
+.inline{display:inline}
+.warn{background:#fffaeb;border:1px solid #fedf89;color:#93370d;padding:8px 12px;border-radius:8px}
+</style>
+{% block head %}{% endblock %}
+</head>
+<body>
+<div class="top">
+  <div class="brand">근골격계 조사</div>
+  <nav>
+    {% set ep = request.endpoint %}
+    <a href="{{ url_for('admin') }}" class="{{ 'on' if ep=='admin' }}">대시보드</a>
+    <a href="{{ url_for('rounds') }}" class="{{ 'on' if ep=='rounds' }}">조사회차</a>
+    <a href="{{ url_for('jobs') }}" class="{{ 'on' if ep in ('jobs','assess') }}">작업·유해요인조사표</a>
+    <a href="{{ url_for('survey', preview=1) }}" target="_blank" title="직원용 설문 화면(미리보기)">증상조사표</a>
+    <a href="{{ url_for('responses') }}" class="{{ 'on' if ep in ('responses','response_detail') }}">증상조사 응답</a>
+    <a href="{{ url_for('improvements') }}" class="{{ 'on' if ep=='improvements' }}">개선계획</a>
+    <a href="{{ url_for('report') }}" class="{{ 'on' if ep=='report' }}">정기보고서</a>
+    <a href="{{ url_for('qr_page') }}" class="{{ 'on' if ep=='qr_page' }}">QR</a>
+  </nav>
+  <div class="right">
+    {% if all_rounds %}
+    <select onchange="location='{{ url_for('round_select', rid=0) }}'.replace('/0','/'+this.value)">
+      {% for r in all_rounds %}<option value="{{ r.id }}" {{ 'selected' if cur_round and r.id==cur_round.id }}>{{ r.title }}{{ ' (접수중)' if r.is_open }}</option>{% endfor %}
+    </select>
+    {% endif %}
+    <a href="{{ url_for('admin_logout') }}">로그아웃</a>
+  </div>
+</div>
+<main>
+{% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
+{% block body %}{% endblock %}
+</main>
+</body>
+</html>

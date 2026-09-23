@@ -1,0 +1,12 @@
+{% extends 'admin_base.html' %}
+{% block body %}
+<h1>설문 QR 코드</h1>
+<div class="card" style="text-align:center">
+  <img src="{{ url_for('qr_png') }}" style="width:320px;max-width:90%">
+  <p style="font-size:18px;font-weight:700">근골격계질환 증상조사 / Musculoskeletal Symptom Survey</p>
+  <p class="mut">{{ url }}</p>
+  <p><button class="btn p" onclick="window.print()">인쇄</button> <a class="btn" href="{{ url_for('qr_png') }}" download="증상조사_QR.png">PNG 저장</a></p>
+  <p class="mut">※ 로컬(PC)에서 실행 중이면 이 주소는 같은 사내망에서만 접속됩니다. 현장 배포는 서버 배포 후 QR을 다시 출력하세요.</p>
+</div>
+<style>@media print{.top,.btn,.mut{display:none}.card{border:0}}</style>
+{% endblock %}

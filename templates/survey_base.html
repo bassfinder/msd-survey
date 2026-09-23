@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#c8102e">
+<link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+<title>{{ t.app_title }}</title>
+<style>
+:root{--red:#c8102e;--ink:#1d2330;--mut:#667085;--line:#e4e7ec;--bg:#f5f6f8;--card:#fff;--ok:#12805c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 system-ui,-apple-system,"Malgun Gothic","Noto Sans KR",sans-serif}
+header{background:var(--red);color:#fff;padding:14px 16px}
+header h1{margin:0;font-size:19px}
+header .sub{font-size:13px;opacity:.9}
+.langs{display:flex;gap:6px;flex-wrap:wrap;padding:10px 16px;background:#fff;border-bottom:1px solid var(--line)}
+.langs a{text-decoration:none;padding:4px 9px;border:1px solid var(--line);border-radius:16px;font-size:13px;color:var(--ink)}
+.langs a.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+main{max-width:720px;margin:0 auto;padding:14px 16px 60px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0}
+.card h2{margin:0 0 10px;font-size:17px;color:var(--red)}
+label.f{display:block;font-weight:600;margin:12px 0 4px;font-size:15px}
+.req::after{content:" *";color:var(--red)}
+input[type=text],input[type=number],select,textarea{width:100%;padding:10px;border:1px solid #cfd4dc;border-radius:8px;font:inherit;background:#fff}
+textarea{min-height:70px}
+.row{display:flex;gap:8px;align-items:center}
+.row input{flex:1}
+.row span{white-space:nowrap;color:var(--mut);font-size:14px}
+.q{font-weight:600;margin:16px 0 6px}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opts label{display:flex;align-items:center;gap:6px;border:1px solid #cfd4dc;border-radius:8px;padding:8px 10px;background:#fff;cursor:pointer;font-size:15px}
+.opts label:has(input:checked){border-color:var(--red);background:#fff1f3}
+.opts.col{flex-direction:column}
+.opts input{accent-color:var(--red);width:18px;height:18px}
+.hint{color:var(--mut);font-size:13px}
+.part{border:2px solid var(--red);border-radius:12px;padding:12px;margin:12px 0;background:#fffafa}
+.part h3{margin:0 0 4px;color:var(--red)}
+.err{background:#fde8e8;color:#9b1c1c;border:1px solid #f5b5b5;padding:10px;border-radius:8px}
+button.submit{width:100%;padding:15px;font-size:18px;font-weight:700;color:#fff;background:var(--red);border:0;border-radius:10px;margin-top:10px}
+.hide{display:none}
+.consent{font-size:13px;color:var(--mut);background:#f9fafb;border-radius:8px;padding:10px}
+</style>
+</head>
+<body>
+<header><h1>{{ t.app_title }}</h1><div class="sub">{{ COMPANY }} {{ SITE }}</div></header>
+<nav class="langs">
+{% for lg in S.LANGS %}<a href="?lang={{ lg }}" class="{{ 'on' if lg==lang }}">{{ S.FLAGS[lg] }} {{ S.LANG_NAMES[lg] }}</a>{% endfor %}
+</nav>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

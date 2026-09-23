@@ -1,0 +1,47 @@
+{% extends 'admin_base.html' %}
+{% block body %}
+<h1>조사 회차</h1>
+<p class="mut">유해요인조사 1회 = 1회차. 정기조사는 3년마다(안전보건규칙 제657조), 수시조사는 사유 발생 시. 설문 접수는 한 번에 한 회차만 열 수 있습니다.</p>
+{% set opened = rows|selectattr('is_open')|list %}
+{% if opened %}<div class="card" style="border:2px solid #abefc6;background:#ecfdf3">
+  <h2 style="color:#067647">✅ 설문 접수중 — {{ opened[0].title }}</h2>
+  {% if not survey_public %}<p style="margin:4px 0;color:#b54708"><b>🔒 직원 공개 꺼짐 (SURVEY_OPEN=0)</b> — 지금은 관리자만 로그인해서 테스트할 수 있습니다. 직원에게 열려면 서버 설정에서 SURVEY_OPEN=1 로 바꾸세요.</p>{% endif %}
+  <p style="margin:4px 0">직원용 설문 주소: <b>{{ request.url_root.rstrip('/') }}{{ url_for('survey') }}</b></p>
+  <p style="margin:8px 0 0"><a class="btn p" href="{{ url_for('survey') }}" target="_blank">설문 열기 (직원 화면)</a>
+    <a class="btn" href="{{ url_for('qr_page') }}">QR 보기·인쇄</a>
+    <a class="btn" href="{{ url_for('responses') }}">들어온 응답 보기</a></p>
+  <p class="mut" style="margin:8px 0 0">다음 단계: ① QR을 현장에 붙이거나 주소를 공유 → ② 응답이 들어오면 [대시보드]에서 확인 → ③ [작업·유해요인조사표]에서 작업별 조사표 작성 → ④ [개선계획] → ⑤ [정기보고서]. 조사가 끝나면 [마감]을 누르세요.</p>
+</div>{% endif %}
+<div class="card">
+  <table>
+    <tr><th>회차</th><th>구분</th><th>기간</th><th>조사자</th><th class="n">응답</th><th>설문</th><th></th></tr>
+    {% for r in rows %}
+    <tr><td><a href="{{ url_for('round_select', rid=r.id) }}">{{ r.title }}</a></td><td>{{ r.kind }}</td>
+      <td>{{ r.start_date or '' }} ~ {{ r.end_date or '' }}</td><td>{{ r.investigator or '' }} {{ ('(' ~ r.agency ~ ')') if r.agency }}</td>
+      <td class="n">{{ counts[r.id] }}</td>
+      <td><form class="inline" method="post" action="{{ url_for('round_toggle', rid=r.id) }}">
+        {% if r.is_open %}<span class="badge b-complaint">접수중</span> <button class="btn s">마감</button>
+        {% else %}<button class="btn s p">접수 시작</button>{% endif %}</form></td>
+      <td><a class="btn s" href="?edit={{ r.id }}">수정</a>
+        {% if not counts[r.id] %}<form class="inline" method="post" action="{{ url_for('round_delete', rid=r.id) }}" onsubmit="return confirm('삭제할까요? 유해요인조사표·개선계획도 함께 삭제됩니다.')"><button class="btn s d">삭제</button></form>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="7" class="mut">아직 회차가 없습니다. 아래에서 첫 회차를 만드세요.</td></tr>{% endfor %}
+  </table>
+</div>
+<div class="card">
+  <h2>{{ '회차 수정' if edit else '새 회차' }}</h2>
+  <form method="post">
+    <input type="hidden" name="id" value="{{ edit.id if edit else '' }}">
+    <div class="frm">
+      <div class="full"><label class="f">회차명</label><input type="text" name="title" value="{{ edit.title if edit else '' }}" placeholder="2026년 근골격계부담작업 유해요인조사(정기)"></div>
+      <div><label class="f">조사구분</label><select name="kind">{% for k in S.SURVEY_KIND %}<option {{ 'selected' if edit and edit.kind==k }}>{{ k }}</option>{% endfor %}</select></div>
+      <div><label class="f">시작일</label><input type="date" name="start_date" value="{{ edit.start_date if edit and edit.start_date else '' }}"></div>
+      <div><label class="f">종료일</label><input type="date" name="end_date" value="{{ edit.end_date if edit and edit.end_date else '' }}"></div>
+      <div><label class="f">조사자</label><input type="text" name="investigator" value="{{ edit.investigator if edit and edit.investigator else '' }}"></div>
+      <div><label class="f">조사기관(자체/위탁기관명)</label><input type="text" name="agency" value="{{ edit.agency if edit and edit.agency else '' }}" placeholder="자체조사"></div>
+      <div class="full"><label class="f">보고서 · 조사 개요 추가 서술 (선택)</label><textarea name="overview">{{ edit.overview if edit and edit.overview else '' }}</textarea></div>
+      <div class="full"><label class="f">보고서 · 종합 의견 (선택, 비우면 자동 문구)</label><textarea name="conclusion">{{ edit.conclusion if edit and edit.conclusion else '' }}</textarea></div>
+    </div>
+    <p><button class="btn p">저장</button> {% if edit %}<a class="btn" href="{{ url_for('rounds') }}">취소</a>{% endif %}</p>
+  </form>
+</div>
+{% endblock %}
