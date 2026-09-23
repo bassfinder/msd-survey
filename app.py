@@ -430,7 +430,9 @@ def inject():
 # ── 직원용 증상조사표 ─────────────────────────────────────────────────
 @app.route('/healthz')
 def healthz():
-    return {'ok': True}
+    # 배포 점검용 — 비밀값은 내보내지 않고 '설정됨' 여부만
+    return {'ok': True, 'db': db.engine.url.get_backend_name(), 'admin_password_set': bool(os.environ.get('ADMIN_PASSWORD')),
+            'secret_key_set': bool(os.environ.get('SECRET_KEY')), 'survey_open': SURVEY_OPEN, 'cloud': _on_cloud}
 
 
 @app.route('/')
