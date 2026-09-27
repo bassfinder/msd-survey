@@ -27,7 +27,7 @@
 <div class="card">
   <h2>{{ t.consent_title }}</h2>
   <div class="consent">{{ t.consent_body }}</div>
-  <div class="opts" style="margin-top:8px"><label><input type="checkbox" name="consent" value="1" required {{ 'checked' if form.get('consent') }}> {{ t.consent_agree }}</label></div>
+  <div class="opts" style="margin-top:8px"><label><input type="checkbox" name="consent" value="1" required {{ 'checked' if form.get('consent') or request.args.get('c') }}> {{ t.consent_agree }}</label></div>
 </div>
 
 <div class="card">
@@ -131,7 +131,8 @@ function fillJobs(){
   JOBS.filter(x => x.dept === d).forEach(x => { const o = new Option(x.name, x.id); if (String(x.id)===SEL_JOB) o.selected = true; j.add(o); });
 }
 const EMPS = {{ emps_js|tojson }};
-const SEL_EMP = "{{ form.get('employee_id','') }}";
+const SEL_EMP = "{{ form.get('employee_id','') or request.args.get('emp','') }}";
+const CUR_LANG = "{{ lang }}", FROM_SWITCH = {{ 'true' if request.args.get('emp') and not form else 'false' }};
 (function fillEmps(){
   const sel = $('#emp'); let grp = null, cur = null;
   EMPS.forEach(e => { if (e.dept !== cur) { cur = e.dept; grp = document.createElement('optgroup'); grp.label = cur || '-'; sel.appendChild(grp); }
@@ -144,9 +145,18 @@ function onEmp(first){
   if (v === 'other') { if (!first) ni.value = ''; ni.focus && !first && ni.focus(); return; }
   const e = EMPS.find(x => String(x.id) === v);
   ni.value = e ? e.name : '';
-  if (e && !first) { $('#dept').value = e.dept; fillJobs(); $('#job').value = String(e.job_id || ''); fillUnits(); }
+  langLinks(e);
+  // 명단에 설문 언어가 정해진 사람은 그 언어로 자동 전환 (한 번만 — 본인이 다시 바꾸면 그대로 둠)
+  if (e && !first && e.lang && e.lang !== CUR_LANG) {
+    let done = false; try { done = sessionStorage.getItem('al_' + e.id); sessionStorage.setItem('al_' + e.id, '1'); } catch (_) {}
+    if (!done) { location.href = '?lang=' + e.lang + '&emp=' + e.id + ($('input[name=consent]').checked ? '&c=1' : ''); return; }
+  }
+  if (e && (!first || FROM_SWITCH)) { $('#dept').value = e.dept; fillJobs(); $('#job').value = String(e.job_id || ''); fillUnits(); }
 }
 $('#emp').addEventListener('change', () => onEmp(false));
+function langLinks(e){   // 언어를 바꿔도 고른 이름이 유지되게
+  document.querySelectorAll('nav.langs a').forEach(a => { const lg = new URL(a.href, location.href).searchParams.get('lang');
+    a.href = '?lang=' + lg + (e ? '&emp=' + e.id : '') + ($('input[name=consent]').checked ? '&c=1' : ''); }); }
 const FORM_U = {{ form_units|tojson }};
 const UQ = {hrs: {codes: {{ S.U_HRS|tojson }}, labels: [{% for c in S.U_HRS %}{{ t['u_hrs_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_hrs_q|tojson }}},
             wt: {codes: {{ S.U_WT|tojson }}, labels: [{% for c in S.U_WT %}{{ t['u_wt_' ~ c]|tojson }}{{ ',' if not loop.last }}{% endfor %}], q: {{ t.u_wt_q|tojson }}},

@@ -5,21 +5,22 @@
   <h2>명단 불러오기</h2>
   <form method="post" enctype="multipart/form-data" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
     <input type="file" name="roster" accept=".xlsx">
-    <button class="btn p" onclick="return confirm('현재 명단을 새 엑셀로 바꿉니다. 이미 바꿔둔 작업 연결은 이름이 같으면 유지됩니다. 진행할까요?')">불러오기</button>
+    <button class="btn p" onclick="return confirm('현재 명단을 새 엑셀로 바꿉니다. 이름이 같은 직원은 작업 연결·국적·설문 언어가 유지됩니다. 진행할까요?')">불러오기</button>
   </form>
   <p class="mut" style="margin:6px 0 0">'성명'·'부서' 머리글이 있는 직원명단 엑셀(예: DYS_직원 List)을 올리면 <b>재직자(퇴사일 빈칸)만</b> 읽어 부서명이 같은 작업에 자동 연결합니다.
     물류팀[출고]→물류팀(출고)처럼 대괄호는 괄호로 바꿔 맞춥니다.</p>
 </div>
 <form method="post" class="card tbl-wrap">
-  <h2>작업 연결 <span class="mut" style="font-weight:400;font-size:13px">— 실제로 다른 작업을 하는 사람은 여기서 바꾸세요</span></h2>
+  <h2>작업 연결 · 설문 언어 <span class="mut" style="font-weight:400;font-size:13px">— 실제로 다른 작업을 하는 사람은 여기서 바꾸세요. 설문 언어를 정해두면 직원이 이름을 고르는 순간 그 언어로 바뀝니다(본인이 다른 언어로 제출하면 그 언어로 기억)</span></h2>
   <table>
-    <tr><th>성명</th><th>명단 부서</th><th>직책</th><th>국적</th><th>비고</th><th>연결 작업</th></tr>
+    <tr><th>성명</th><th>명단 부서</th><th>직책</th><th>국적</th><th>비고</th><th>설문 언어</th><th>연결 작업</th></tr>
     {% for e in emps %}
     <tr style="{{ 'background:#fffaeb' if not e.job_id }}"><td>{{ e.name }}</td><td>{{ e.dept }}</td><td>{{ e.position }}</td><td>{{ e.nationality }}</td><td>{{ e.note or '' }}</td>
+      <td><select name="lang_{{ e.id }}"><option value="">(한국어)</option>{% for lg in S.LANGS if lg != 'ko' %}<option value="{{ lg }}" {{ 'selected' if e.lang==lg }}>{{ S.LANG_NAMES[lg] }}</option>{% endfor %}</select></td>
       <td><select name="job_{{ e.id }}"><option value="">(미연결)</option>
         {% for j in jobs_all %}<option value="{{ j.id }}" {{ 'selected' if e.job_id==j.id }}>{{ j.dept }} / {{ j.name }}</option>{% endfor %}</select></td></tr>
-    {% else %}<tr><td colspan="6" class="mut">아직 명단이 없습니다. 위에서 엑셀을 불러오세요.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="7" class="mut">아직 명단이 없습니다. 위에서 엑셀을 불러오세요.</td></tr>{% endfor %}
   </table>
-  {% if emps %}<p><button class="btn p">연결 저장</button></p>{% endif %}
+  {% if emps %}<p><button class="btn p">저장</button></p>{% endif %}
 </form>
 {% endblock %}

@@ -182,7 +182,7 @@
   {% for r in rs %}{% set pl = r.part_levels %}
   <tr><td><a href="{{ url_for('response_detail', rid=r.id) }}">{{ r.name }}</a></td><td><span class="badge b-{{ r.top_level or 'none' }}">{{ S.KOSHA_KO[r.top_level] }}</span></td>
     {% for p in S.PARTS %}<td>{% if pl.get(p) in ('manage','pain') %}<span class="badge b-{{ pl[p] }}">{{ S.KOSHA_KO[pl[p]] }}</span>{% else %}<span class="mut">정상</span>{% endif %}</td>{% endfor %}
-    <td>{{ r.opinion_ko or '' }}</td></tr>
+    <td>{{ r.opinion_ko or r.opinion or '' }}</td></tr>
   {% endfor %}
 </table></div>
 {% endif %}

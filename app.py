@@ -14,7 +14,8 @@ from datetime import datetime, timedelta, date
 from urllib.parse import quote
 from werkzeug.middleware.proxy_fix import ProxyFix
 from deep_translator import GoogleTranslator
-import os, io, json
+import os, io, json, time
+from concurrent.futures import ThreadPoolExecutor
 
 import survey_def as S
 
@@ -37,6 +38,8 @@ if _db_url.startswith('postgres://'):
 # SQLITE_PATH: 로컬 테스트용 DB 파일 지정 (없으면 앱 폴더의 msd.db)
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url or 'sqlite:///' + os.environ.get('SQLITE_PATH', os.path.join(BASE_DIR, 'msd.db')).replace(os.sep, '/')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# 오래 쉬었다 들어와도 끊긴 DB 연결로 오류 나지 않게 (사용 전 연결 확인·주기적 재연결)
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {'pool_pre_ping': True, 'pool_recycle': 280}
 db = SQLAlchemy(app)
 
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'msd2026')
@@ -157,13 +160,54 @@ def unit_stats(round_id, job_id):
     return out
 
 
-def translate_to_korean(text, source_lang):
+_tr_pool = ThreadPoolExecutor(max_workers=2)
+_tr_block_until = [0.0]          # 구글 실패 후 잠시 쉬기 (차단 중 계속 두드리지 않음)
+
+
+def translate_to_korean(text, source_lang, timeout=8):
+    """자유기재 한국어 번역. 실패·지연 시 None (원문은 따로 보존되어 있음)"""
     if source_lang == 'ko' or not text or not text.strip():
         return text
+    if time.time() < _tr_block_until[0]:
+        return None
     try:
-        return GoogleTranslator(source=source_lang, target='ko').translate(text) or text
+        fut = _tr_pool.submit(lambda: GoogleTranslator(source=source_lang, target='ko').translate(text))
+        return fut.result(timeout=timeout) or None
     except Exception:
-        return text
+        _tr_block_until[0] = time.time() + 600
+        return None
+
+
+def fill_translations(rows, budget=25):
+    """외국어 응답의 자유기재 번역을 관리자 화면을 열 때 채움 — 직원 제출 순간엔 번역기를 부르지 않음(몰림·차단 대비).
+    한 번에 budget초까지만, 실패하면 10분 뒤 다시 시도(그동안 화면엔 원문 표시)"""
+    t0, changed = time.time(), False
+    for r in rows:
+        if r.lang == 'ko':
+            continue
+        if time.time() - t0 > budget or time.time() < _tr_block_until[0]:
+            break
+        for fld in ('job_other', 'cur_task', 'prev_task', 'opinion'):
+            if getattr(r, fld) and not getattr(r, fld + '_ko'):
+                v = translate_to_korean(getattr(r, fld), r.lang)
+                if v:
+                    setattr(r, fld + '_ko', v)
+                    changed = True
+        for col, key, ko in (('pain', 'other', 'other_ko'), ('units', 'hzt', 'hzt_ko')):
+            data = jload(getattr(r, col), {} if col == 'pain' else [])
+            items = data.values() if isinstance(data, dict) else data
+            hit = False
+            for d in items:
+                if d.get(key) and not d.get(ko):
+                    v = translate_to_korean(d[key], r.lang)
+                    if v:
+                        d[ko] = v
+                        hit = True
+            if hit:
+                setattr(r, col, jdump(data))
+                changed = True
+    if changed:
+        db.session.commit()
 
 
 # ── 모델 ──────────────────────────────────────────────────────────────
@@ -271,6 +315,7 @@ class Employee(db.Model):
     dept = db.Column(db.String(100))          # 명단 원래 부서명
     position = db.Column(db.String(50))
     nationality = db.Column(db.String(50))
+    lang = db.Column(db.String(5))            # 설문 언어 (관리자 지정 또는 본인이 제출한 언어) → 이름 고르면 자동 전환
     note = db.Column(db.String(100))          # 명단 비고 (육아휴직·출산휴가 등)
     job_id = db.Column(db.Integer, db.ForeignKey('job.id'))
     job = db.relationship('Job')
@@ -356,6 +401,7 @@ def ensure_columns():
         ('response', 'employee_id', 'INTEGER'),
         ('job', 'units_tr', 'TEXT'),
         ('response', 'units', 'TEXT'),
+        ('employee', 'lang', 'VARCHAR(5)'),
     ]
     is_pg = str(db.engine.url).startswith('postgresql')
     with db.engine.connect() as conn:
@@ -497,9 +543,10 @@ def survey():
         elif any(not (p['duration'] and p['intensity'] and p['frequency']) for p in pain.values()):
             error = t.err_required
         if not error:
-            for p in pain.values():
-                if p['other']:
-                    p['other_ko'] = translate_to_korean(p['other'], lang)
+            if lang == 'ko':
+                for p in pain.values():
+                    if p['other']:
+                        p['other_ko'] = p['other']
             job_id = to_int(f.get('job_id'))
             r = Response(
                 round_id=rnd.id, lang=lang,
@@ -523,8 +570,9 @@ def survey():
                 burden=f.get('burden'), has_pain=has_pain, pain=jdump(pain),
                 opinion=f.get('opinion', '').strip(),
             )
-            for fld in ('job_other', 'cur_task', 'prev_task', 'opinion'):
-                setattr(r, fld + '_ko', translate_to_korean(getattr(r, fld), lang))
+            if lang == 'ko':         # 외국어는 원문만 저장 → 번역은 관리자 화면에서 (fill_translations)
+                for fld in ('job_other', 'cur_task', 'prev_task', 'opinion'):
+                    setattr(r, fld + '_ko', getattr(r, fld))
             job = db.session.get(Job, job_id) if job_id else None
             chosen = []
             for i, u in enumerate(job.unit_list if job else []):
@@ -532,22 +580,27 @@ def survey():
                     c_ = {'name': u['name'], 'load': to_int(f.get(f'u_{i}_load')), 'freq': to_int(f.get(f'u_{i}_freq')),
                           'hrs': f.get(f'u_{i}_hrs'), 'wt': f.get(f'u_{i}_wt'), 'cnt': f.get(f'u_{i}_cnt'),
                           'pos': f.getlist(f'u_{i}_pos'), 'hz': f.get(f'u_{i}_hz'), 'hzt': (f.get(f'u_{i}_hzt') or '').strip()}
-                    if c_['hzt']:
-                        c_['hzt_ko'] = translate_to_korean(c_['hzt'], lang)
+                    if c_['hzt'] and lang == 'ko':
+                        c_['hzt_ko'] = c_['hzt']
                     c_['sug'] = S.suggest_items(c_)
                     chosen.append(c_)
             r.units = jdump(chosen)
             if not r.cur_task and chosen:
                 r.cur_task = r.cur_task_ko = ', '.join(c['name'] for c in chosen)
             r.top_level = S.judge_person(pain)[1]
-            replaced = 0
-            if r.employee_id:
-                for old in Response.query.filter_by(round_id=rnd.id, employee_id=r.employee_id).all():
-                    db.session.delete(old)
-                    replaced += 1
             db.session.add(r)
+            if emp and emp.lang != lang:
+                emp.lang = lang              # 본인이 고른 언어를 기억 → 다음에 이름 고르면 자동 선택
             db.session.commit()
-            session['last_rid'] = r.id
+            replaced, keep = 0, r.id
+            if r.employee_id:
+                # 1인 1응답: 저장 뒤 같은 사람의 응답은 가장 최근 것만 남김 (버튼 연타·동시 제출에도 안전)
+                ids = [x for (x,) in db.session.query(Response.id).filter_by(round_id=rnd.id, employee_id=r.employee_id)]
+                keep = max(ids)
+                replaced = Response.query.filter(Response.round_id == rnd.id, Response.employee_id == r.employee_id,
+                                                 Response.id != keep).delete(synchronize_session=False)
+                db.session.commit()
+            session['last_rid'] = keep
             session['replaced'] = replaced
             return redirect(url_for('survey_done'))
     def units_js(j):
@@ -561,7 +614,7 @@ def survey():
     emps = sorted(Employee.query.filter(Employee.job_id.in_([j.id for j in jobs])).all(),
                   key=lambda e: (order.get(e.job_id, (999, 999)), e.name))
     emps_js = [{'id': e.id, 'name': e.name, 'dept': e.job.dept if e.job else '', 'job_id': e.job_id,
-                'pos': e.position or '', 'leave': e.on_leave} for e in emps]
+                'pos': e.position or '', 'leave': e.on_leave, 'lang': e.lang or ''} for e in emps]
     mine = db.session.get(Response, session.get('last_rid')) if session.get('last_rid') and not preview else None
     if mine and mine.round_id != rnd.id:
         mine = None
@@ -628,6 +681,7 @@ def round_select(rid):
 def analyze(rnd):
     """대시보드·Excel·PDF 공통 집계"""
     res = Response.query.filter_by(round_id=rnd.id).order_by(Response.id).all() if rnd else []
+    fill_translations(res)
     n = len(res)
     pct = lambda a, b: round(a * 100.0 / b, 1) if b else 0.0
 
@@ -967,6 +1021,29 @@ def parse_roster(fileobj):
 MASTER_VERSION = 1
 
 
+def sync_employees(rows, overwrite_job=False):
+    """직원명단 갱신: 이름으로 맞춰 기존 직원은 수정만(번호 유지 → 이미 받은 응답·미응답자 대조가 안 깨짐),
+    새 이름은 추가, 명단에서 빠진 사람은 삭제. 국적·언어·작업 연결은 값이 있을 때만 덮어씀"""
+    cur = {e.name: e for e in Employee.query}
+    seen = set()
+    for r in rows:
+        e = cur.get(r['name'])
+        if not e:
+            e = Employee(name=r['name'])
+            db.session.add(e)
+            cur[r['name']] = e
+        seen.add(r['name'])
+        e.dept, e.position, e.note = r.get('dept'), r.get('position'), r.get('note')
+        for k in ('nationality', 'lang'):
+            if r.get(k):
+                setattr(e, k, r[k])
+        if r.get('job_id') and (overwrite_job or not e.job_id):
+            e.job_id = r['job_id']
+    for name, e in cur.items():
+        if name not in seen:
+            db.session.delete(e)
+
+
 @app.route('/admin/master.json')
 @admin_required
 def master_export():
@@ -976,7 +1053,7 @@ def master_export():
                       'description': j.description, 'active': j.active, 'sort': j.sort, 'units': j.units, 'units_tr': j.units_tr}
                      for j in Job.query.order_by(Job.sort, Job.id)],
             'employees': [{'name': e.name, 'dept': e.dept, 'position': e.position, 'nationality': e.nationality,
-                           'note': e.note, 'job_key': e.job_id} for e in Employee.query.order_by(Employee.id)]}
+                           'note': e.note, 'lang': e.lang, 'job_key': e.job_id} for e in Employee.query.order_by(Employee.id)]}
     stamp = kst(datetime.utcnow()).strftime('%Y%m%d')
     return _download(json.dumps(data, ensure_ascii=False, indent=1).encode('utf-8'), f'근골격계_기본데이터_{stamp}.json', 'application/json')
 
@@ -1007,10 +1084,7 @@ def master_import():
         keymap[d['key']] = j.id
     emps = data.get('employees', [])
     if emps:
-        Employee.query.delete()
-        for e in emps:
-            db.session.add(Employee(name=e['name'], dept=e.get('dept'), position=e.get('position'), nationality=e.get('nationality'),
-                                    note=e.get('note'), job_id=keymap.get(e.get('job_key'))))
+        sync_employees([dict(e, job_id=keymap.get(e.get('job_key'))) for e in emps], overwrite_job=True)
     db.session.commit()
     flash(f"기본 데이터를 가져왔습니다 — 작업 추가 {added}·갱신 {updated}, 직원명단 {len(emps)}명 (내보낸 시각 {data.get('exported_at')})")
     return redirect(url_for('jobs'))
@@ -1030,15 +1104,13 @@ def employees():
             by_dept = {}
             for j in jobs_all:
                 by_dept.setdefault(j.dept, j)           # 부서의 첫 작업에 연결 (필요하면 화면에서 변경)
-            old = {e.name: e.job_id for e in Employee.query}
-            Employee.query.delete()
             miss = set()
             for r in rows:
                 j = by_dept.get(norm_dept(r['dept']))
                 if not j:
                     miss.add(r['dept'])
-                db.session.add(Employee(name=r['name'], dept=r['dept'], position=r['position'], nationality=r['nationality'], note=r['note'],
-                                        job_id=old.get(r['name']) or (j.id if j else None)))
+                r['job_id'] = j.id if j else None      # 새 직원만 부서 기본 작업에 연결, 기존 직원의 작업 연결은 유지
+            sync_employees(rows)
             db.session.commit()
             flash(f"직원 {len(rows)}명을 불러왔습니다." + (f" 작업과 연결 안 된 부서: {', '.join(sorted(miss))}" if miss else ''))
         else:                                            # 작업 연결 변경
@@ -1046,8 +1118,11 @@ def employees():
                 v = request.form.get(f'job_{e.id}')
                 if v is not None:
                     e.job_id = to_int(v)
+                lg = request.form.get(f'lang_{e.id}')
+                if lg is not None:
+                    e.lang = lg if lg in S.LANGS else None
             db.session.commit()
-            flash('작업 연결을 저장했습니다.')
+            flash('작업 연결·설문 언어를 저장했습니다.')
         return redirect(url_for('employees'))
     emps = Employee.query.order_by(Employee.dept, Employee.name).all()
     return render_template('admin_employees.html', emps=emps, jobs_all=jobs_all)
@@ -1201,6 +1276,8 @@ def responses():
 @admin_required
 def response_detail(rid):
     r = db.session.get(Response, rid) or abort(404)
+    if request.method == 'GET':
+        fill_translations([r], budget=10)
     if request.method == 'POST':
         r.followup = request.form.get('followup')
         r.admin_note = request.form.get('admin_note', '').strip()
@@ -1251,7 +1328,7 @@ def improvements():
         jid = to_int(request.args.get('job'))
         a = Assessment.query.filter_by(round_id=rnd.id, job_id=jid).first()
         hz = jload(a.hazards, []) if a else []
-        ops = [r.opinion_ko for r in Response.query.filter_by(round_id=rnd.id, job_id=jid) if r.opinion_ko]
+        ops = [r.opinion_ko or r.opinion for r in Response.query.filter_by(round_id=rnd.id, job_id=jid) if r.opinion_ko or r.opinion]
         rank = next((x['rank'] for x in A['ranked'] if x['job'].id == jid), None)
         prefill = {'job_id': jid, 'priority': rank,
                    'problem': '\n'.join([f"[종합판정] {jx['q_label']} — {jx['why']}" for jx in A['job_summary'] if jx['job'].id == jid][:1]
