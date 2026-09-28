@@ -1023,6 +1023,16 @@ def parse_roster(fileobj):
 MASTER_VERSION = 1
 
 
+# 국적 → 설문 언어 (명단 엑셀 국적 칸으로 자동 지정, 오타 대비 앞글자로 판별). 없는 국적은 한국어
+NAT_LANG = [('캄보', 'km'), ('네팔', 'ne'), ('러시', 'ru'), ('카자', 'ru'), ('우즈', 'ru'), ('키르', 'ru'), ('우크', 'ru'),
+            ('타지', 'ru'), ('벨라', 'ru'), ('미국', 'en'), ('영국', 'en'), ('필리', 'en')]
+
+
+def lang_for_nat(nat):
+    nat = (nat or '').replace(' ', '')
+    return next((lg for k, lg in NAT_LANG if nat.startswith(k)), None)
+
+
 def sync_employees(rows, overwrite_job=False):
     """직원명단 갱신: 이름으로 맞춰 기존 직원은 수정만(번호 유지 → 이미 받은 응답·미응답자 대조가 안 깨짐),
     새 이름은 추가, 명단에서 빠진 사람은 삭제. 국적·언어·작업 연결은 값이 있을 때만 덮어씀"""
@@ -1036,9 +1046,13 @@ def sync_employees(rows, overwrite_job=False):
             cur[r['name']] = e
         seen.add(r['name'])
         e.dept, e.position, e.note = r.get('dept'), r.get('position'), r.get('note')
-        for k in ('nationality', 'lang'):
-            if r.get(k):
-                setattr(e, k, r[k])
+        nat_changed = bool(r.get('nationality')) and r['nationality'] != e.nationality
+        if r.get('nationality'):
+            e.nationality = r['nationality']
+        if r.get('lang'):
+            e.lang = r['lang']
+        elif nat_changed or (e.nationality and not e.lang):
+            e.lang = lang_for_nat(e.nationality) or e.lang
         if r.get('job_id') and (overwrite_job or not e.job_id):
             e.job_id = r['job_id']
     for name, e in cur.items():
