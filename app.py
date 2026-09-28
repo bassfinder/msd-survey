@@ -33,8 +33,10 @@ app.config['MAX_CONTENT_LENGTH'] = 40 * 1024 * 1024
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 _db_url = os.environ.get('DATABASE_URL', '')
-if _db_url.startswith('postgres://'):
-    _db_url = _db_url.replace('postgres://', 'postgresql://', 1)
+# 드라이버를 psycopg2로 명시 — SQLAlchemy 2.1부터 기본 드라이버가 psycopg(3)로 바뀌어 설치 안 된 모듈을 찾다가 서버가 멈췄음(2026-09-28)
+for _pre in ('postgres://', 'postgresql://'):
+    if _db_url.startswith(_pre):
+        _db_url = 'postgresql+psycopg2://' + _db_url[len(_pre):]
 # SQLITE_PATH: 로컬 테스트용 DB 파일 지정 (없으면 앱 폴더의 msd.db)
 app.config['SQLALCHEMY_DATABASE_URI'] = _db_url or 'sqlite:///' + os.environ.get('SQLITE_PATH', os.path.join(BASE_DIR, 'msd.db')).replace(os.sep, '/')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
